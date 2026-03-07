@@ -14,7 +14,7 @@ int gb_init(GB *gb, const char *path) {
     gb->rom_path[0] = '\0';
   }
 
-  if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
     fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
     return 0;
   }
@@ -29,8 +29,7 @@ int gb_init(GB *gb, const char *path) {
     return 0;
   }
 
-  gb->renderer = SDL_CreateRenderer(
-      gb->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  gb->renderer = SDL_CreateRenderer(gb->window, -1, SDL_RENDERER_ACCELERATED);
 
   if (!gb->renderer) {
     fprintf(stderr, "SDL_CreateRenderer: %s\n", SDL_GetError());
@@ -78,8 +77,17 @@ int gb_init(GB *gb, const char *path) {
 
 void gb_run(GB *gb) {
   SDL_Event event;
+  u32 start_ticks = SDL_GetTicks();
+  u64 frames = 0;
 
   while (gb->running) {
+    u32 target_ticks = start_ticks + (u32)(frames * (1000.0 / 59.7275));
+    u32 current_ticks = SDL_GetTicks();
+
+    if (current_ticks < target_ticks) {
+      SDL_Delay(target_ticks - current_ticks);
+    }
+
     int cycles = 0;
     while (cycles < 17556) {
       int consumed = cpu_step(gb);
@@ -92,6 +100,7 @@ void gb_run(GB *gb) {
       apu_step(gb, consumed);
       cycles += consumed;
     }
+    frames++;
 
     while (SDL_PollEvent(&event)) {
       if (event.type == SDL_QUIT) {

@@ -1,6 +1,7 @@
 #include "../include/apu.h"
 #include "../include/gb.h"
 #include <SDL2/SDL.h>
+#include <stdio.h>
 #include <string.h>
 
 static const float DUTY_TABLE[4][8] = {{0, 0, 0, 0, 0, 0, 0, 1},
@@ -17,10 +18,12 @@ void apu_init(GB *gb) {
   want.freq = 44100;
   want.format = AUDIO_F32SYS;
   want.channels = 2;
-  want.samples = 2048;
+  want.samples = 1024;
 
   gb->apu.device = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
-  if (gb->apu.device != 0) {
+  if (gb->apu.device == 0) {
+    fprintf(stderr, "SDL_OpenAudioDevice: %s\n", SDL_GetError());
+  } else {
     SDL_PauseAudioDevice(gb->apu.device, 0);
   }
 }
@@ -32,7 +35,8 @@ void apu_quit(GB *gb) {
   }
 }
 
-void apu_step(GB *gb, int cycles) {
+void apu_step(GB *gb, int m_cycles) {
+  int cycles = m_cycles * 4;
   APU *apu = &gb->apu;
   if (!(apu->nr52 & 0x80))
     return;
@@ -120,10 +124,11 @@ void apu_step(GB *gb, int cycles) {
     }
   }
 
-  apu->sample_timer += cycles;
-  int raw_sample_rate = 4194304 / 44100;
-  if (apu->sample_timer >= raw_sample_rate) {
-    apu->sample_timer -= raw_sample_rate;
+  float sample_interval = 4194304.0f / 44100.0f;
+  apu->sample_timer += (float)cycles;
+
+  while (apu->sample_timer >= sample_interval) {
+    apu->sample_timer -= sample_interval;
 
     float out_l = 0.0f;
     float out_r = 0.0f;
@@ -173,16 +178,15 @@ void apu_step(GB *gb, int cycles) {
         out_r += amt;
     }
 
-    apu->sample_buffer[apu->sample_count++] =
-        out_l * ((apu->nr50 >> 4) & 7) / 7.0f;
-    apu->sample_buffer[apu->sample_count++] = out_r * (apu->nr50 & 7) / 7.0f;
+    float master_l = ((apu->nr50 >> 4) & 0x07) / 7.0f;
+    float master_r = (apu->nr50 & 0x07) / 7.0f;
 
-    if (apu->sample_count >= 4096) {
+    apu->sample_buffer[apu->sample_count++] = out_l * master_l * 0.25f;
+    apu->sample_buffer[apu->sample_count++] = out_r * master_r * 0.25f;
+
+    if (apu->sample_count >= 1024) {
       if (apu->device) {
-        SDL_QueueAudio(apu->device, apu->sample_buffer, 4096 * sizeof(float));
-        while (SDL_GetQueuedAudioSize(apu->device) > 4096 * sizeof(float) * 2) {
-          SDL_Delay(1);
-        }
+        SDL_QueueAudio(apu->device, apu->sample_buffer, 1024 * sizeof(float));
       }
       apu->sample_count = 0;
     }

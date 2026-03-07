@@ -65,7 +65,7 @@ typedef struct {
 
   float sample_buffer[4096];
   int sample_count;
-  int sample_timer;
+  float sample_timer;
 } APU;
 
 void apu_init(struct GB *gb);

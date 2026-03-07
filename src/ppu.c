@@ -107,15 +107,22 @@ void ppu_step(GB *gb, int m_cycles) {
   int t_cycles = m_cycles * 4;
   gb->ppu.mode_clock += t_cycles;
 
-  u8 lcdc = bus_read(&gb->mem, gb->rom, 0xFF40);
+  u8 stat = gb->mem.io[0x41];
+  u8 ly = gb->mem.io[0x44];
+  u8 lyc = gb->mem.io[0x45];
+
+  int current_mode = gb->ppu.mode;
+  int req_int = 0;
+  u8 lcdc = gb->mem.io[0x40];
+
   if ((lcdc & 0x80) == 0) {
     gb->ppu.mode_clock = 0;
     gb->ppu.mode = PPU_MODE_HBLANK;
-    bus_write(&gb->mem, gb->rom, 0xFF44, 0);
+    gb->mem.io[0x44] = 0;
+    stat = (stat & ~0x03) | PPU_MODE_HBLANK;
+    gb->mem.io[0x41] = stat;
     return;
   }
-
-  u8 ly = bus_read(&gb->mem, gb->rom, 0xFF44);
 
   switch (gb->ppu.mode) {
   case PPU_MODE_OAM:
@@ -129,6 +136,8 @@ void ppu_step(GB *gb, int m_cycles) {
     if (gb->ppu.mode_clock >= 172) {
       gb->ppu.mode_clock -= 172;
       gb->ppu.mode = PPU_MODE_HBLANK;
+      if (stat & 0x08)
+        req_int = 1;
       ppu_render_scanline(gb);
     }
     break;
@@ -140,9 +149,13 @@ void ppu_step(GB *gb, int m_cycles) {
 
       if (ly == 144) {
         gb->ppu.mode = PPU_MODE_VBLANK;
+        if (stat & 0x10)
+          req_int = 1;
         cpu_request_interrupt(gb, INT_VBLANK);
       } else {
         gb->ppu.mode = PPU_MODE_OAM;
+        if (stat & 0x20)
+          req_int = 1;
       }
     }
     break;
@@ -154,23 +167,29 @@ void ppu_step(GB *gb, int m_cycles) {
 
       if (ly > 153) {
         gb->ppu.mode = PPU_MODE_OAM;
+        if (stat & 0x20)
+          req_int = 1;
         ly = 0;
       }
     }
     break;
   }
 
-  bus_write(&gb->mem, gb->rom, 0xFF44, ly);
+  gb->mem.io[0x44] = ly;
 
-  u8 stat = bus_read(&gb->mem, gb->rom, 0xFF41);
-  stat &= ~0x03;
-  stat |= (gb->ppu.mode & 0x03);
-
-  u8 lyc = bus_read(&gb->mem, gb->rom, 0xFF45);
   if (ly == lyc) {
     stat |= 0x04;
+    if (stat & 0x40) {
+      req_int = 1;
+    }
   } else {
     stat &= ~0x04;
   }
-  bus_write(&gb->mem, gb->rom, 0xFF41, stat);
+
+  stat = (stat & ~0x03) | gb->ppu.mode;
+  gb->mem.io[0x41] = stat;
+
+  if (req_int) {
+    cpu_request_interrupt(gb, INT_LCD_STAT);
+  }
 }

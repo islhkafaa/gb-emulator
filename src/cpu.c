@@ -161,57 +161,57 @@ static int execute_cb(struct GB *gb) {
 
   if (opcode < 0x40) {
     switch (opcode >> 3) {
-    case 0: { // RLC
+    case 0: {
       u8 c = (val & 0x80) >> 7;
       val = (val << 1) | c;
       gb->cpu.f = (val == 0 ? FLAG_Z : 0) | (c ? FLAG_C : 0);
     } break;
-    case 1: { // RRC
+    case 1: {
       u8 c = val & 0x01;
       val = (val >> 1) | (c << 7);
       gb->cpu.f = (val == 0 ? FLAG_Z : 0) | (c ? FLAG_C : 0);
     } break;
-    case 2: { // RL
+    case 2: {
       u8 old_c = (gb->cpu.f & FLAG_C) ? 1 : 0;
       u8 c = (val & 0x80) >> 7;
       val = (val << 1) | old_c;
       gb->cpu.f = (val == 0 ? FLAG_Z : 0) | (c ? FLAG_C : 0);
     } break;
-    case 3: { // RR
+    case 3: {
       u8 old_c = (gb->cpu.f & FLAG_C) ? 0x80 : 0;
       u8 c = val & 0x01;
       val = (val >> 1) | old_c;
       gb->cpu.f = (val == 0 ? FLAG_Z : 0) | (c ? FLAG_C : 0);
     } break;
-    case 4: { // SLA
+    case 4: {
       u8 c = (val & 0x80) >> 7;
       val <<= 1;
       gb->cpu.f = (val == 0 ? FLAG_Z : 0) | (c ? FLAG_C : 0);
     } break;
-    case 5: { // SRA
+    case 5: {
       u8 c = val & 0x01;
       val = (i8)val >> 1;
       gb->cpu.f = (val == 0 ? FLAG_Z : 0) | (c ? FLAG_C : 0);
     } break;
-    case 6: { // SWAP
+    case 6: {
       val = (val >> 4) | (val << 4);
       gb->cpu.f = (val == 0 ? FLAG_Z : 0);
     } break;
-    case 7: { // SRL
+    case 7: {
       u8 c = val & 0x01;
       val >>= 1;
       gb->cpu.f = (val == 0 ? FLAG_Z : 0) | (c ? FLAG_C : 0);
     } break;
     }
     cb_write(gb, reg_idx, val);
-  } else if (opcode < 0x80) { // BIT
+  } else if (opcode < 0x80) {
     gb->cpu.f = (gb->cpu.f & FLAG_C) | FLAG_H;
     if (!(val & (1 << bit)))
       gb->cpu.f |= FLAG_Z;
     cycles = (reg_idx == 6) ? 12 : 8;
-  } else if (opcode < 0xC0) { // RES
+  } else if (opcode < 0xC0) {
     cb_write(gb, reg_idx, val & ~(1 << bit));
-  } else { // SET
+  } else {
     cb_write(gb, reg_idx, val | (1 << bit));
   }
   return cycles;

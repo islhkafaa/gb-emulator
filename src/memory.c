@@ -1,8 +1,7 @@
 #include "../include/memory.h"
 #include "../include/apu.h"
+#include "../include/gb.h"
 #include "../include/joypad.h"
-
-struct GB;
 
 void memory_init(Memory *mem, const u8 *rom) {
   if (rom) {
@@ -136,6 +135,11 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
   }
   if (addr >= 0xFF10 && addr <= 0xFF3F) {
     apu_write((struct GB *)mem->gb_ptr, addr, val);
+    return;
+  }
+  if (addr == 0xFF04) {
+    ((struct GB *)mem->gb_ptr)->div_counter = 0;
+    mem->io[0x04] = 0;
     return;
   }
   if (addr <= MEM_IO_END) {

@@ -5,40 +5,24 @@
 void timer_tick(struct GB *gb, int m_cycles) {
   int t_cycles = m_cycles * 4;
 
+  u16 old_div = gb->div_counter;
   gb->div_counter += t_cycles;
-  while (gb->div_counter >= 256) {
-    gb->div_counter -= 256;
-    gb->mem.io[0x04]++;
-  }
+  gb->mem.io[0x04] = gb->div_counter >> 8;
 
   u8 tac = gb->mem.io[0x07];
   if (tac & 0x04) {
-    gb->timer_counter += t_cycles;
+    int freq_shifts[] = {9, 3, 5, 7};
+    int shift = freq_shifts[tac & 0x03];
 
-    int freq = 1024;
-    switch (tac & 0x03) {
-    case 0:
-      freq = 1024;
-      break;
-    case 1:
-      freq = 16;
-      break;
-    case 2:
-      freq = 64;
-      break;
-    case 3:
-      freq = 256;
-      break;
-    }
+    int old_bit = (old_div >> shift) & 1;
+    int new_bit = (gb->div_counter >> shift) & 1;
 
-    while (gb->timer_counter >= freq) {
-      gb->timer_counter -= freq;
-      u8 tima = gb->mem.io[0x05];
-      if (tima == 0xFF) {
+    if (old_bit && !new_bit) {
+      if (gb->mem.io[0x05] == 0xFF) {
         gb->mem.io[0x05] = gb->mem.io[0x06];
         cpu_request_interrupt(gb, INT_TIMER);
       } else {
-        gb->mem.io[0x05] = tima + 1;
+        gb->mem.io[0x05]++;
       }
     }
   }
