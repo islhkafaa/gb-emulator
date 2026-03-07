@@ -1,6 +1,6 @@
 #include "../include/memory.h"
 
-u8 bus_read(const Memory *mem, const u8 *rom, u16 addr) {
+u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
   if (addr <= MEM_ROM_BANKN_END) {
     return rom ? rom[addr] : 0xFF;
   }
@@ -31,7 +31,7 @@ u8 bus_read(const Memory *mem, const u8 *rom, u16 addr) {
   return mem->ie;
 }
 
-void bus_write(Memory *mem, u16 addr, u8 val) {
+void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
   if (addr <= MEM_ROM_BANKN_END) {
     return;
   }
@@ -56,6 +56,14 @@ void bus_write(Memory *mem, u16 addr, u8 val) {
     return;
   }
   if (addr <= MEM_UNUSABLE_END) {
+    return;
+  }
+  if (addr == 0xFF46) {
+    u16 src = val << 8;
+    for (int i = 0; i < 0xA0; i++) {
+      mem->oam[i] = bus_read(mem, rom, src + i);
+    }
+    mem->io[addr - MEM_IO_START] = val;
     return;
   }
   if (addr <= MEM_IO_END) {

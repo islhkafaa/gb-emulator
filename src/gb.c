@@ -1,4 +1,5 @@
 #include "../include/gb.h"
+#include "../include/ppu.h"
 #include "../include/timer.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
@@ -29,6 +30,18 @@ int gb_init(GB *gb) {
     return 0;
   }
 
+  gb->texture =
+      SDL_CreateTexture(gb->renderer, SDL_PIXELFORMAT_ARGB8888,
+                        SDL_TEXTUREACCESS_STREAMING, GB_WIDTH, GB_HEIGHT);
+
+  if (!gb->texture) {
+    fprintf(stderr, "SDL_CreateTexture: %s\n", SDL_GetError());
+    SDL_DestroyRenderer(gb->renderer);
+    SDL_DestroyWindow(gb->window);
+    SDL_Quit();
+    return 0;
+  }
+
   SDL_RenderSetLogicalSize(gb->renderer, GB_WIDTH, GB_HEIGHT);
 
   cpu_init(&gb->cpu);
@@ -49,6 +62,7 @@ void gb_run(GB *gb) {
         break;
       }
       timer_tick(gb, consumed);
+      ppu_step(gb, consumed);
       cycles += consumed;
     }
 
@@ -61,13 +75,19 @@ void gb_run(GB *gb) {
       }
     }
 
-    SDL_SetRenderDrawColor(gb->renderer, 0x9B, 0xBC, 0x0F, 0xFF);
+    SDL_UpdateTexture(gb->texture, NULL, gb->ppu.frame_buffer,
+                      GB_WIDTH * sizeof(u32));
+
     SDL_RenderClear(gb->renderer);
+    SDL_RenderCopy(gb->renderer, gb->texture, NULL, NULL);
     SDL_RenderPresent(gb->renderer);
   }
 }
 
 void gb_quit(GB *gb) {
+  if (gb->texture) {
+    SDL_DestroyTexture(gb->texture);
+  }
   if (gb->renderer) {
     SDL_DestroyRenderer(gb->renderer);
     gb->renderer = NULL;

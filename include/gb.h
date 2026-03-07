@@ -3,6 +3,7 @@
 
 #include "cpu.h"
 #include "memory.h"
+#include "ppu.h"
 #include "types.h"
 #include <SDL2/SDL.h>
 #include <stddef.h>
@@ -14,11 +15,13 @@
 typedef struct GB {
   SDL_Window *window;
   SDL_Renderer *renderer;
+  SDL_Texture *texture;
   bool_t running;
   Memory mem;
   u8 *rom;
   size_t rom_size;
   CPU cpu;
+  PPU ppu;
   int div_counter;
   int timer_counter;
 } GB;

@@ -29,8 +29,8 @@ static u16 fetch16(struct GB *gb) {
 
 static void push16(struct GB *gb, u16 val) {
   gb->cpu.sp -= 2;
-  bus_write(&gb->mem, gb->cpu.sp, (u8)(val & 0xFF));
-  bus_write(&gb->mem, gb->cpu.sp + 1, (u8)((val >> 8) & 0xFF));
+  bus_write(&gb->mem, gb->rom, gb->cpu.sp, (u8)(val & 0xFF));
+  bus_write(&gb->mem, gb->rom, gb->cpu.sp + 1, (u8)((val >> 8) & 0xFF));
 }
 
 static u16 pop16(struct GB *gb) {
@@ -115,7 +115,7 @@ static void alu_cp(struct GB *gb, u8 val) {
 void cpu_request_interrupt(struct GB *gb, u8 interrupt) {
   u8 if_flag = bus_read(&gb->mem, gb->rom, 0xFF0F);
   if_flag |= interrupt;
-  bus_write(&gb->mem, 0xFF0F, if_flag);
+  bus_write(&gb->mem, gb->rom, 0xFF0F, if_flag);
 }
 
 static int execute_cb(struct GB *gb) {
@@ -163,7 +163,7 @@ int cpu_step(struct GB *gb) {
 
     gb->cpu.ime = FALSE;
     if_flag &= ~interrupt;
-    bus_write(&gb->mem, 0xFF0F, if_flag);
+    bus_write(&gb->mem, gb->rom, 0xFF0F, if_flag);
 
     push16(gb, gb->cpu.pc);
     gb->cpu.pc = vector;
@@ -228,7 +228,7 @@ int cpu_step(struct GB *gb) {
     return 12;
 
   case 0x22:
-    bus_write(&gb->mem, gb->cpu.hl, gb->cpu.a);
+    bus_write(&gb->mem, gb->rom, gb->cpu.hl, gb->cpu.a);
     gb->cpu.hl++;
     return 8;
 
@@ -285,7 +285,7 @@ int cpu_step(struct GB *gb) {
     return 4;
 
   case 0x77:
-    bus_write(&gb->mem, gb->cpu.hl, gb->cpu.a);
+    bus_write(&gb->mem, gb->rom, gb->cpu.hl, gb->cpu.a);
     return 8;
 
   case 0x78:
@@ -559,7 +559,7 @@ int cpu_step(struct GB *gb) {
     return 16;
 
   case 0xE0:
-    bus_write(&gb->mem, 0xFF00 + fetch8(gb), gb->cpu.a);
+    bus_write(&gb->mem, gb->rom, 0xFF00 + fetch8(gb), gb->cpu.a);
     return 12;
 
   case 0xE1:

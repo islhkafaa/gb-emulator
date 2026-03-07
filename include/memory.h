@@ -42,7 +42,7 @@ typedef struct {
   u8 ie;
 } Memory;
 
-u8 bus_read(const Memory *mem, const u8 *rom, u16 addr);
-void bus_write(Memory *mem, u16 addr, u8 val);
+u8 bus_read(Memory *mem, const u8 *rom, u16 addr);
+void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val);
 
 #endif
