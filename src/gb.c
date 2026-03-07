@@ -1,4 +1,5 @@
 #include "../include/gb.h"
+#include "../include/timer.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
 
@@ -47,6 +48,7 @@ void gb_run(GB *gb) {
         gb->running = FALSE;
         break;
       }
+      timer_tick(gb, consumed);
       cycles += consumed;
     }
 

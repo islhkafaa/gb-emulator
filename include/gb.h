@@ -19,6 +19,8 @@ typedef struct GB {
   u8 *rom;
   size_t rom_size;
   CPU cpu;
+  int div_counter;
+  int timer_counter;
 } GB;
 
 int gb_init(GB *gb);
