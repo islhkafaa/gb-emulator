@@ -26,4 +26,7 @@ int rom_load(const char *path, u8 **out_data, size_t *out_size);
 void rom_free(u8 *data);
 void rom_print_header(const u8 *rom);
 
+int ram_load(const char *rom_path, u8 *ram_data, size_t ram_size);
+int ram_save(const char *rom_path, const u8 *ram_data, size_t ram_size);
+
 #endif

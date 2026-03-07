@@ -1,6 +1,7 @@
 #ifndef GB_H
 #define GB_H
 
+#include "apu.h"
 #include "cpu.h"
 #include "joypad.h"
 #include "memory.h"
@@ -23,12 +24,14 @@ typedef struct GB {
   size_t rom_size;
   CPU cpu;
   PPU ppu;
+  APU apu;
   Joypad joypad;
   int div_counter;
   int timer_counter;
+  char rom_path[1024];
 } GB;
 
-int gb_init(GB *gb);
+int gb_init(GB *gb, const char *path);
 void gb_run(GB *gb);
 void gb_quit(GB *gb);
 

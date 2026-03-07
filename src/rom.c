@@ -78,3 +78,40 @@ void rom_print_header(const u8 *rom) {
   printf("Checksum : stored=0x%02X computed=0x%02X [%s]\n", stored, checksum,
          (stored == checksum) ? "OK" : "FAIL");
 }
+
+static void get_sav_path(const char *rom_path, char *out_path, size_t max_len) {
+  strncpy(out_path, rom_path, max_len - 1);
+  out_path[max_len - 1] = '\0';
+  char *ext = strrchr(out_path, '.');
+  if (ext) {
+    strcpy(ext, ".sav");
+  } else {
+    strncat(out_path, ".sav", max_len - strlen(out_path) - 1);
+  }
+}
+
+int ram_load(const char *rom_path, u8 *ram_data, size_t ram_size) {
+  char sav_path[1024];
+  get_sav_path(rom_path, sav_path, sizeof(sav_path));
+
+  FILE *f = fopen(sav_path, "rb");
+  if (!f)
+    return 0;
+
+  size_t read_bytes = fread(ram_data, 1, ram_size, f);
+  fclose(f);
+  return read_bytes == ram_size;
+}
+
+int ram_save(const char *rom_path, const u8 *ram_data, size_t ram_size) {
+  char sav_path[1024];
+  get_sav_path(rom_path, sav_path, sizeof(sav_path));
+
+  FILE *f = fopen(sav_path, "wb");
+  if (!f)
+    return 0;
+
+  size_t written = fwrite(ram_data, 1, ram_size, f);
+  fclose(f);
+  return written == ram_size;
+}

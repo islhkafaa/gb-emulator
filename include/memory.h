@@ -26,11 +26,19 @@
 #define MEM_IE 0xFFFF
 
 #define MEM_VRAM_SIZE 0x2000
-#define MEM_EXT_RAM_SIZE 0x2000
+#define MEM_EXT_RAM_SIZE 0x8000
 #define MEM_WRAM_SIZE 0x2000
 #define MEM_OAM_SIZE 0x00A0
 #define MEM_IO_SIZE 0x0080
 #define MEM_HRAM_SIZE 0x007F
+
+typedef struct {
+  u8 type;
+  u8 rom_bank;
+  u8 ram_bank;
+  u8 ram_enable;
+  u8 banking_mode;
+} MBC;
 
 typedef struct {
   u8 vram[MEM_VRAM_SIZE];
@@ -41,8 +49,10 @@ typedef struct {
   u8 hram[MEM_HRAM_SIZE];
   u8 ie;
   void *gb_ptr;
+  MBC mbc;
 } Memory;
 
+void memory_init(Memory *mem, const u8 *rom);
 u8 bus_read(Memory *mem, const u8 *rom, u16 addr);
 void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val);
 

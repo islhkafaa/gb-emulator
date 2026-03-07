@@ -1,10 +1,19 @@
 #include "../include/gb.h"
 #include "../include/ppu.h"
+#include "../include/rom.h"
 #include "../include/timer.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
+#include <string.h>
 
-int gb_init(GB *gb) {
+int gb_init(GB *gb, const char *path) {
+  if (path) {
+    strncpy(gb->rom_path, path, sizeof(gb->rom_path) - 1);
+    gb->rom_path[sizeof(gb->rom_path) - 1] = '\0';
+  } else {
+    gb->rom_path[0] = '\0';
+  }
+
   if (SDL_Init(SDL_INIT_VIDEO) != 0) {
     fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
     return 0;
@@ -47,6 +56,19 @@ int gb_init(GB *gb) {
   cpu_init(&gb->cpu);
 
   gb->mem.gb_ptr = gb;
+  memory_init(&gb->mem, gb->rom);
+
+  if (gb->rom) {
+    u8 type = gb->rom[0x0147];
+    if (type == 0x03 || type == 0x06 || type == 0x09 || type == 0x0F ||
+        type == 0x10 || type == 0x13 || type == 0x1B || type == 0x1E ||
+        type == 0xFF) {
+      ram_load(gb->rom_path, gb->mem.ext_ram, MEM_EXT_RAM_SIZE);
+    }
+  }
+
+  apu_init(gb);
+
   gb->joypad.action_keys = 0x0F;
   gb->joypad.dir_keys = 0x0F;
 
@@ -67,6 +89,7 @@ void gb_run(GB *gb) {
       }
       timer_tick(gb, consumed);
       ppu_step(gb, consumed);
+      apu_step(gb, consumed);
       cycles += consumed;
     }
 
@@ -96,6 +119,17 @@ void gb_run(GB *gb) {
 }
 
 void gb_quit(GB *gb) {
+  if (gb->rom) {
+    u8 type = gb->rom[0x0147];
+    if (type == 0x03 || type == 0x06 || type == 0x09 || type == 0x0F ||
+        type == 0x10 || type == 0x13 || type == 0x1B || type == 0x1E ||
+        type == 0xFF) {
+      ram_save(gb->rom_path, gb->mem.ext_ram, MEM_EXT_RAM_SIZE);
+    }
+  }
+
+  apu_quit(gb);
+
   if (gb->texture) {
     SDL_DestroyTexture(gb->texture);
   }

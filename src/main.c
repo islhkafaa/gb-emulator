@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
 
   rom_print_header(gb->rom);
 
-  if (!gb_init(gb)) {
+  if (!gb_init(gb, argv[1])) {
     fprintf(stderr, "gb_init failed\n");
     rom_free(gb->rom);
     free(gb);
