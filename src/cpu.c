@@ -1397,8 +1397,8 @@ int cpu_step(struct GB *gb) {
     return 8;
 
   default:
-    fprintf(stderr, "cpu_step: Unhandled opcode 0x%02X at PC 0x%04X\n", opcode,
-            gb->cpu.pc - 1);
-    return 0;
+    fprintf(stderr, "cpu_step: Unhandled opcode 0x%02X at PC 0x%04X (NOP)\n",
+            opcode, (u16)(gb->cpu.pc - 1));
+    return 4;
   }
 }

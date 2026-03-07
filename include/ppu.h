@@ -14,6 +14,7 @@ typedef struct {
   u32 frame_buffer[160 * 144];
   int mode;
   int mode_clock;
+  bool_t stat_irq_line;
 } PPU;
 
 void ppu_step(struct GB *gb, int m_cycles);

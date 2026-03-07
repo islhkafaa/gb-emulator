@@ -62,56 +62,77 @@ void ppu_render_scanline(GB *gb) {
   int obj_size = (lcdc & 0x04) ? 16 : 8;
   int obj_count = 0;
 
-  for (u16 oam_addr = 0xFE00; oam_addr < 0xFEA0; oam_addr += 4) {
-    if (obj_count >= 10)
-      break;
+  typedef struct {
+    int y, x, tile, flags, oam_idx;
+  } Sprite;
+  Sprite sprites[10];
 
+  for (int i = 0; i < 40 && obj_count < 10; i++) {
+    u16 oam_addr = 0xFE00 + i * 4;
     int obj_y = bus_read(&gb->mem, gb->rom, oam_addr) - 16;
-    int obj_x = bus_read(&gb->mem, gb->rom, oam_addr + 1) - 8;
-    u8 tile_num = bus_read(&gb->mem, gb->rom, oam_addr + 2);
-    u8 flags = bus_read(&gb->mem, gb->rom, oam_addr + 3);
+    if (ly < obj_y || ly >= obj_y + obj_size)
+      continue;
+    sprites[obj_count].y = obj_y;
+    sprites[obj_count].x = bus_read(&gb->mem, gb->rom, oam_addr + 1) - 8;
+    sprites[obj_count].tile = bus_read(&gb->mem, gb->rom, oam_addr + 2);
+    sprites[obj_count].flags = bus_read(&gb->mem, gb->rom, oam_addr + 3);
+    sprites[obj_count].oam_idx = i;
+    obj_count++;
+  }
 
-    if (ly >= obj_y && ly < (obj_y + obj_size)) {
-      obj_count++;
-
-      if (obj_size == 16) {
-        tile_num &= 0xFE;
+  for (int i = 0; i < obj_count - 1; i++) {
+    for (int j = i + 1; j < obj_count; j++) {
+      if (sprites[j].x < sprites[i].x ||
+          (sprites[j].x == sprites[i].x &&
+           sprites[j].oam_idx < sprites[i].oam_idx)) {
+        Sprite tmp = sprites[i];
+        sprites[i] = sprites[j];
+        sprites[j] = tmp;
       }
+    }
+  }
 
-      int line = ly - obj_y;
-      if (flags & 0x40) {
-        line = (obj_size - 1) - line;
-      }
-      line *= 2;
+  for (int s = obj_count - 1; s >= 0; s--) {
+    int obj_y = sprites[s].y;
+    int obj_x = sprites[s].x;
+    u8 tile_num = (u8)sprites[s].tile;
+    u8 flags = (u8)sprites[s].flags;
 
-      u16 tile_addr = 0x8000 + (tile_num * 16) + line;
-      u8 data1 = bus_read(&gb->mem, gb->rom, tile_addr);
-      u8 data2 = bus_read(&gb->mem, gb->rom, tile_addr + 1);
+    if (obj_size == 16)
+      tile_num &= 0xFE;
 
-      u8 pal = (flags & 0x10) ? bus_read(&gb->mem, gb->rom, 0xFF49)
-                              : bus_read(&gb->mem, gb->rom, 0xFF48);
+    int line = ly - obj_y;
+    if (flags & 0x40)
+      line = (obj_size - 1) - line;
+    line *= 2;
 
-      for (int p_x = 0; p_x < 8; p_x++) {
-        int screen_x = obj_x + p_x;
-        if (screen_x < 0 || screen_x >= 160)
+    u16 tile_addr = 0x8000 + (tile_num * 16) + line;
+    u8 data1 = bus_read(&gb->mem, gb->rom, tile_addr);
+    u8 data2 = bus_read(&gb->mem, gb->rom, tile_addr + 1);
+
+    u8 pal = (flags & 0x10) ? bus_read(&gb->mem, gb->rom, 0xFF49)
+                            : bus_read(&gb->mem, gb->rom, 0xFF48);
+
+    for (int p_x = 0; p_x < 8; p_x++) {
+      int screen_x = obj_x + p_x;
+      if (screen_x < 0 || screen_x >= 160)
+        continue;
+
+      int color_bit = (flags & 0x20) ? p_x : 7 - p_x;
+      int color_idx =
+          ((data2 >> color_bit) & 1) << 1 | ((data1 >> color_bit) & 1);
+
+      if (color_idx == 0)
+        continue;
+
+      if ((flags & 0x80) != 0) {
+        u32 current_bg = gb->ppu.frame_buffer[ly * 160 + screen_x];
+        if (current_bg != PALETTE[(bgp & 0x03)])
           continue;
-
-        int color_bit = (flags & 0x20) ? p_x : 7 - p_x;
-        int color_idx =
-            ((data2 >> color_bit) & 1) << 1 | ((data1 >> color_bit) & 1);
-
-        if (color_idx == 0)
-          continue;
-
-        if ((flags & 0x80) != 0) {
-          u32 current_bg = gb->ppu.frame_buffer[ly * 160 + screen_x];
-          if (current_bg != PALETTE[(bgp & 0x03)])
-            continue;
-        }
-
-        int mapped_col = (pal >> (color_idx * 2)) & 0x03;
-        gb->ppu.frame_buffer[ly * 160 + screen_x] = PALETTE[mapped_col];
       }
+
+      int mapped_col = (pal >> (color_idx * 2)) & 0x03;
+      gb->ppu.frame_buffer[ly * 160 + screen_x] = PALETTE[mapped_col];
     }
   }
 }
@@ -192,17 +213,25 @@ void ppu_step(GB *gb, int m_cycles) {
 
   if (ly == lyc) {
     stat |= 0x04;
-    if (stat & 0x40) {
-      req_int = 1;
-    }
   } else {
     stat &= ~0x04;
   }
 
-  stat = (stat & ~0x03) | gb->ppu.mode;
-  gb->mem.io[0x41] = stat;
+  bool_t stat_line = FALSE;
+  if ((stat & 0x40) && (stat & 0x04))
+    stat_line = TRUE;
+  if ((stat & 0x20) && (gb->ppu.mode == PPU_MODE_OAM))
+    stat_line = TRUE;
+  if ((stat & 0x10) && (gb->ppu.mode == PPU_MODE_VBLANK))
+    stat_line = TRUE;
+  if ((stat & 0x08) && (gb->ppu.mode == PPU_MODE_HBLANK))
+    stat_line = TRUE;
 
-  if (req_int) {
+  if (stat_line && !gb->ppu.stat_irq_line) {
     cpu_request_interrupt(gb, INT_LCD_STAT);
   }
+  gb->ppu.stat_irq_line = stat_line;
+
+  stat = (stat & ~0x03) | (gb->ppu.mode & 0x03);
+  gb->mem.io[0x41] = stat;
 }

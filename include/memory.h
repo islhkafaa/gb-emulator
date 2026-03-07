@@ -26,7 +26,7 @@
 #define MEM_IE 0xFFFF
 
 #define MEM_VRAM_SIZE 0x2000
-#define MEM_EXT_RAM_SIZE 0x8000
+#define MEM_EXT_RAM_SIZE 0x20000
 #define MEM_WRAM_SIZE 0x2000
 #define MEM_OAM_SIZE 0x00A0
 #define MEM_IO_SIZE 0x0080
@@ -38,6 +38,7 @@ typedef struct {
   u8 ram_bank;
   u8 ram_enable;
   u8 banking_mode;
+  u8 rom_bank_hi;
 } MBC;
 
 typedef struct {

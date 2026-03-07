@@ -38,87 +38,105 @@ void apu_quit(GB *gb) {
 void apu_step(GB *gb, int m_cycles) {
   int cycles = m_cycles * 4;
   APU *apu = &gb->apu;
-  if (!(apu->nr52 & 0x80))
-    return;
 
-  apu->ch1.timer -= cycles;
-  if (apu->ch1.timer <= 0) {
-    apu->ch1.timer += (2048 - apu->ch1.period) * 4;
-    apu->ch1.duty_pos = (apu->ch1.duty_pos + 1) & 0x07;
-  }
-
-  apu->ch2.timer -= cycles;
-  if (apu->ch2.timer <= 0) {
-    apu->ch2.timer += (2048 - apu->ch2.period) * 4;
-    apu->ch2.duty_pos = (apu->ch2.duty_pos + 1) & 0x07;
-  }
-
-  apu->ch3.timer -= cycles;
-  if (apu->ch3.timer <= 0) {
-    apu->ch3.timer += (2048 - apu->ch3.period) * 2;
-    apu->ch3.sample_pos = (apu->ch3.sample_pos + 1) % 32;
-  }
-
-  apu->ch4.timer -= cycles;
-  if (apu->ch4.timer <= 0) {
-    int divisor = apu->ch4.divisor_code == 0 ? 8 : (apu->ch4.divisor_code << 4);
-    apu->ch4.timer += divisor << apu->ch4.clock_shift;
-    int xor_bit = (apu->ch4.lfsr & 1) ^ ((apu->ch4.lfsr >> 1) & 1);
-    apu->ch4.lfsr = (apu->ch4.lfsr >> 1) | (xor_bit << 14);
-    if (apu->ch4.width_mode) {
-      apu->ch4.lfsr = (apu->ch4.lfsr & ~(1 << 6)) | (xor_bit << 6);
+  if (apu->nr52 & 0x80) {
+    apu->ch1.timer -= cycles;
+    if (apu->ch1.timer <= 0) {
+      apu->ch1.timer += (2048 - apu->ch1.period) * 4;
+      apu->ch1.duty_pos = (apu->ch1.duty_pos + 1) & 0x07;
     }
-  }
 
-  apu->frame_sequencer += cycles;
-  if (apu->frame_sequencer >= 8192) {
-    apu->frame_sequencer -= 8192;
-    apu->cycles++;
+    apu->ch2.timer -= cycles;
+    if (apu->ch2.timer <= 0) {
+      apu->ch2.timer += (2048 - apu->ch2.period) * 4;
+      apu->ch2.duty_pos = (apu->ch2.duty_pos + 1) & 0x07;
+    }
 
-    if ((apu->cycles & 1) == 0) {
-      if (apu->ch1.length_enabled && apu->ch1.length_timer > 0) {
-        if (--apu->ch1.length_timer == 0)
-          apu->ch1.enabled = 0;
-      }
-      if (apu->ch2.length_enabled && apu->ch2.length_timer > 0) {
-        if (--apu->ch2.length_timer == 0)
-          apu->ch2.enabled = 0;
-      }
-      if (apu->ch3.length_enabled && apu->ch3.length_timer > 0) {
-        if (--apu->ch3.length_timer == 0)
-          apu->ch3.enabled = 0;
-      }
-      if (apu->ch4.length_enabled && apu->ch4.length_timer > 0) {
-        if (--apu->ch4.length_timer == 0)
-          apu->ch4.enabled = 0;
+    apu->ch3.timer -= cycles;
+    if (apu->ch3.timer <= 0) {
+      apu->ch3.timer += (2048 - apu->ch3.period) * 2;
+      apu->ch3.sample_pos = (apu->ch3.sample_pos + 1) % 32;
+    }
+
+    apu->ch4.timer -= cycles;
+    if (apu->ch4.timer <= 0) {
+      int divisor =
+          apu->ch4.divisor_code == 0 ? 8 : (apu->ch4.divisor_code << 4);
+      apu->ch4.timer += divisor << apu->ch4.clock_shift;
+      int xor_bit = (apu->ch4.lfsr & 1) ^ ((apu->ch4.lfsr >> 1) & 1);
+      apu->ch4.lfsr = (apu->ch4.lfsr >> 1) | (xor_bit << 14);
+      if (apu->ch4.width_mode) {
+        apu->ch4.lfsr = (apu->ch4.lfsr & ~(1 << 6)) | (xor_bit << 6);
       }
     }
-    if ((apu->cycles & 7) == 7) {
-      if (apu->ch1.envelope_period > 0) {
-        if (--apu->ch1.envelope_timer <= 0) {
-          apu->ch1.envelope_timer = apu->ch1.envelope_period;
-          if (apu->ch1.envelope_add && apu->ch1.volume < 15)
-            apu->ch1.volume++;
-          else if (!apu->ch1.envelope_add && apu->ch1.volume > 0)
-            apu->ch1.volume--;
+
+    apu->frame_sequencer += cycles;
+    if (apu->frame_sequencer >= 8192) {
+      apu->frame_sequencer -= 8192;
+      apu->cycles++;
+
+      if ((apu->cycles & 1) == 0) {
+        if (apu->ch1.length_enabled && apu->ch1.length_timer > 0) {
+          if (--apu->ch1.length_timer == 0)
+            apu->ch1.enabled = 0;
+        }
+        if (apu->ch2.length_enabled && apu->ch2.length_timer > 0) {
+          if (--apu->ch2.length_timer == 0)
+            apu->ch2.enabled = 0;
+        }
+        if (apu->ch3.length_enabled && apu->ch3.length_timer > 0) {
+          if (--apu->ch3.length_timer == 0)
+            apu->ch3.enabled = 0;
+        }
+        if (apu->ch4.length_enabled && apu->ch4.length_timer > 0) {
+          if (--apu->ch4.length_timer == 0)
+            apu->ch4.enabled = 0;
         }
       }
-      if (apu->ch2.envelope_period > 0) {
-        if (--apu->ch2.envelope_timer <= 0) {
-          apu->ch2.envelope_timer = apu->ch2.envelope_period;
-          if (apu->ch2.envelope_add && apu->ch2.volume < 15)
-            apu->ch2.volume++;
-          else if (!apu->ch2.envelope_add && apu->ch2.volume > 0)
-            apu->ch2.volume--;
+      if ((apu->cycles & 7) == 7) {
+        if (apu->ch1.envelope_period > 0) {
+          if (--apu->ch1.envelope_timer <= 0) {
+            apu->ch1.envelope_timer = apu->ch1.envelope_period;
+            if (apu->ch1.envelope_add && apu->ch1.volume < 15)
+              apu->ch1.volume++;
+            else if (!apu->ch1.envelope_add && apu->ch1.volume > 0)
+              apu->ch1.volume--;
+          }
+        }
+        if (apu->ch2.envelope_period > 0) {
+          if (--apu->ch2.envelope_timer <= 0) {
+            apu->ch2.envelope_timer = apu->ch2.envelope_period;
+            if (apu->ch2.envelope_add && apu->ch2.volume < 15)
+              apu->ch2.volume++;
+            else if (!apu->ch2.envelope_add && apu->ch2.volume > 0)
+              apu->ch2.volume--;
+          }
+        }
+        if (apu->ch4.envelope_period > 0) {
+          if (--apu->ch4.envelope_timer <= 0) {
+            apu->ch4.envelope_timer = apu->ch4.envelope_period;
+            if (apu->ch4.envelope_add && apu->ch4.volume < 15)
+              apu->ch4.volume++;
+            else if (!apu->ch4.envelope_add && apu->ch4.volume > 0)
+              apu->ch4.volume--;
+          }
         }
       }
-      if (apu->ch4.envelope_period > 0) {
-        if (--apu->ch4.envelope_timer <= 0) {
-          apu->ch4.envelope_timer = apu->ch4.envelope_period;
-          if (apu->ch4.envelope_add && apu->ch4.volume < 15)
-            apu->ch4.volume++;
-          else if (!apu->ch4.envelope_add && apu->ch4.volume > 0)
-            apu->ch4.volume--;
+      if ((apu->cycles & 3) == 2 && apu->ch1.sweep_enabled) {
+        if (--apu->ch1.sweep_timer <= 0) {
+          apu->ch1.sweep_timer =
+              apu->ch1.sweep_period ? apu->ch1.sweep_period : 8;
+          if (apu->ch1.sweep_period > 0) {
+            int delta = apu->ch1.shadow_period >> apu->ch1.sweep_shift;
+            int new_period = apu->ch1.shadow_period +
+                             (apu->ch1.sweep_negate ? -delta : delta);
+            if (new_period > 2047) {
+              apu->ch1.enabled = 0;
+            } else {
+              apu->ch1.shadow_period = new_period;
+              apu->ch1.period = new_period;
+            }
+          }
         }
       }
     }
@@ -133,49 +151,51 @@ void apu_step(GB *gb, int m_cycles) {
     float out_l = 0.0f;
     float out_r = 0.0f;
 
-    if (apu->ch1.enabled && (apu->nr51 & 0x11)) {
-      float s = DUTY_TABLE[apu->ch1.duty][apu->ch1.duty_pos] ? 1.0f : -1.0f;
-      float v = (float)apu->ch1.volume / 15.0f;
-      float amt = s * v * 0.1f;
-      if (apu->nr51 & 0x10)
-        out_l += amt;
-      if (apu->nr51 & 0x01)
-        out_r += amt;
-    }
-
-    if (apu->ch2.enabled && (apu->nr51 & 0x22)) {
-      float s = DUTY_TABLE[apu->ch2.duty][apu->ch2.duty_pos] ? 1.0f : -1.0f;
-      float v = (float)apu->ch2.volume / 15.0f;
-      float amt = s * v * 0.1f;
-      if (apu->nr51 & 0x20)
-        out_l += amt;
-      if (apu->nr51 & 0x02)
-        out_r += amt;
-    }
-
-    if (apu->ch3.enabled && apu->ch3.dac_enabled && (apu->nr51 & 0x44)) {
-      u8 b = apu->ch3.wave_ram[apu->ch3.sample_pos / 2];
-      u8 sample = (apu->ch3.sample_pos & 1) ? (b & 0x0F) : (b >> 4);
-      if (apu->ch3.volume_shift > 0) {
-        sample >>= (apu->ch3.volume_shift - 1);
-      } else {
-        sample = 0;
+    if (apu->nr52 & 0x80) {
+      if (apu->ch1.enabled && (apu->nr51 & 0x11)) {
+        float s = DUTY_TABLE[apu->ch1.duty][apu->ch1.duty_pos] ? 1.0f : -1.0f;
+        float v = (float)apu->ch1.volume / 15.0f;
+        float amt = s * v * 0.25f;
+        if (apu->nr51 & 0x10)
+          out_l += amt;
+        if (apu->nr51 & 0x01)
+          out_r += amt;
       }
-      float amt = ((float)sample / 15.0f - 0.5f) * 0.1f;
-      if (apu->nr51 & 0x40)
-        out_l += amt;
-      if (apu->nr51 & 0x04)
-        out_r += amt;
-    }
 
-    if (apu->ch4.enabled && (apu->nr51 & 0x88)) {
-      float s = (apu->ch4.lfsr & 1) ? -1.0f : 1.0f;
-      float v = (float)apu->ch4.volume / 15.0f;
-      float amt = s * v * 0.1f;
-      if (apu->nr51 & 0x80)
-        out_l += amt;
-      if (apu->nr51 & 0x08)
-        out_r += amt;
+      if (apu->ch2.enabled && (apu->nr51 & 0x22)) {
+        float s = DUTY_TABLE[apu->ch2.duty][apu->ch2.duty_pos] ? 1.0f : -1.0f;
+        float v = (float)apu->ch2.volume / 15.0f;
+        float amt = s * v * 0.25f;
+        if (apu->nr51 & 0x20)
+          out_l += amt;
+        if (apu->nr51 & 0x02)
+          out_r += amt;
+      }
+
+      if (apu->ch3.enabled && apu->ch3.dac_enabled && (apu->nr51 & 0x44)) {
+        u8 b = apu->ch3.wave_ram[apu->ch3.sample_pos / 2];
+        u8 sample = (apu->ch3.sample_pos & 1) ? (b & 0x0F) : (b >> 4);
+        if (apu->ch3.volume_shift > 0) {
+          sample >>= (apu->ch3.volume_shift - 1);
+        } else {
+          sample = 0;
+        }
+        float amt = ((float)sample / 15.0f - 0.5f) * 0.25f;
+        if (apu->nr51 & 0x40)
+          out_l += amt;
+        if (apu->nr51 & 0x04)
+          out_r += amt;
+      }
+
+      if (apu->ch4.enabled && (apu->nr51 & 0x88)) {
+        float s = (apu->ch4.lfsr & 1) ? -1.0f : 1.0f;
+        float v = (float)apu->ch4.volume / 15.0f;
+        float amt = s * v * 0.25f;
+        if (apu->nr51 & 0x80)
+          out_l += amt;
+        if (apu->nr51 & 0x08)
+          out_r += amt;
+      }
     }
 
     float master_l = ((apu->nr50 >> 4) & 0x07) / 7.0f;
@@ -195,6 +215,24 @@ void apu_step(GB *gb, int m_cycles) {
 
 u8 apu_read(GB *gb, u16 addr) {
   APU *apu = &gb->apu;
+  if (addr == 0xFF10)
+    return (apu->ch1.sweep_period << 4) | (apu->ch1.sweep_negate << 3) |
+           apu->ch1.sweep_shift;
+  if (addr == 0xFF11)
+    return (apu->ch1.duty << 6) | (64 - apu->ch1.length_timer);
+  if (addr == 0xFF12)
+    return (apu->ch1.initial_volume << 4) | (apu->ch1.envelope_add << 3) |
+           apu->ch1.envelope_period;
+  if (addr == 0xFF16)
+    return (apu->ch2.duty << 6) | (64 - apu->ch2.length_timer);
+  if (addr == 0xFF17)
+    return (apu->ch2.initial_volume << 4) | (apu->ch2.envelope_add << 3) |
+           apu->ch2.envelope_period;
+  if (addr == 0xFF1C)
+    return (apu->ch3.volume_shift << 5);
+  if (addr == 0xFF21)
+    return (apu->ch4.initial_volume << 4) | (apu->ch4.envelope_add << 3) |
+           apu->ch4.envelope_period;
   if (addr == 0xFF24)
     return apu->nr50;
   if (addr == 0xFF25)
@@ -249,7 +287,11 @@ void apu_write(GB *gb, u16 addr, u8 val) {
     return;
   }
 
-  if (addr == 0xFF11) {
+  if (addr == 0xFF10) {
+    apu->ch1.sweep_period = (val >> 4) & 0x07;
+    apu->ch1.sweep_negate = (val & 0x08) != 0;
+    apu->ch1.sweep_shift = val & 0x07;
+  } else if (addr == 0xFF11) {
     apu->ch1.duty = val >> 6;
     apu->ch1.length_timer = 64 - (val & 0x3F);
   } else if (addr == 0xFF12) {
@@ -268,6 +310,17 @@ void apu_write(GB *gb, u16 addr, u8 val) {
       apu->ch1.timer = (2048 - apu->ch1.period) * 4;
       apu->ch1.volume = apu->ch1.initial_volume;
       apu->ch1.envelope_timer = apu->ch1.envelope_period;
+      apu->ch1.shadow_period = apu->ch1.period;
+      apu->ch1.sweep_timer = apu->ch1.sweep_period ? apu->ch1.sweep_period : 8;
+      apu->ch1.sweep_enabled =
+          (apu->ch1.sweep_period > 0 || apu->ch1.sweep_shift > 0);
+      if (apu->ch1.sweep_shift > 0) {
+        int delta = apu->ch1.shadow_period >> apu->ch1.sweep_shift;
+        int new_p =
+            apu->ch1.shadow_period + (apu->ch1.sweep_negate ? -delta : delta);
+        if (new_p > 2047)
+          apu->ch1.enabled = 0;
+      }
     }
   }
 

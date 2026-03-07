@@ -4,6 +4,9 @@
 #include "../include/joypad.h"
 
 void memory_init(Memory *mem, const u8 *rom) {
+  void *gb_ptr = mem->gb_ptr;
+  memset(mem, 0, sizeof(Memory));
+  mem->gb_ptr = gb_ptr;
   if (rom) {
     mem->mbc.type = rom[0x0147];
   } else {
@@ -22,7 +25,10 @@ u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
   if (addr <= MEM_ROM_BANKN_END) {
     if (!rom)
       return 0xFF;
-    u16 bank = mem->mbc.rom_bank;
+    u8 mbc = mem->mbc.type;
+    u32 bank = mem->mbc.rom_bank;
+    if (mbc >= 0x19 && mbc <= 0x1E)
+      bank |= ((u32)mem->mbc.rom_bank_hi << 8);
     return rom[(bank * 0x4000) + (addr - 0x4000)];
   }
   if (addr <= MEM_VRAM_END) {
@@ -37,6 +43,8 @@ u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
           bank = mem->mbc.ram_bank;
         else
           return 0xFF;
+      } else if (mbc >= 0x19 && mbc <= 0x1E) {
+        bank = mem->mbc.ram_bank;
       } else {
         bank = mem->mbc.banking_mode ? mem->mbc.ram_bank : 0;
       }
@@ -75,22 +83,31 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
   u8 mbc = mem->mbc.type;
   int is_mbc1 = (mbc >= 0x01 && mbc <= 0x03);
   int is_mbc3 = (mbc >= 0x0F && mbc <= 0x13);
+  int is_mbc5 = (mbc >= 0x19 && mbc <= 0x1E);
 
   if (addr <= 0x1FFF) {
-    if (is_mbc1 || is_mbc3) {
+    if (is_mbc1 || is_mbc3 || is_mbc5) {
       mem->mbc.ram_enable = ((val & 0x0F) == 0x0A) ? 1 : 0;
     }
     return;
   }
-  if (addr <= 0x3FFF) {
+  if (addr <= 0x2FFF) {
     if (is_mbc1) {
-      mem->mbc.rom_bank = (mem->mbc.rom_bank & 0xE0) | (val & 0x1F);
-      if (mem->mbc.rom_bank == 0)
-        mem->mbc.rom_bank = 1;
+      mem->mbc.rom_bank = (mem->mbc.rom_bank & 0x60) | (val & 0x1F);
+      if ((mem->mbc.rom_bank & 0x1F) == 0)
+        mem->mbc.rom_bank |= 1;
     } else if (is_mbc3) {
       mem->mbc.rom_bank = val & 0x7F;
       if (mem->mbc.rom_bank == 0)
         mem->mbc.rom_bank = 1;
+    } else if (is_mbc5) {
+      mem->mbc.rom_bank = val;
+    }
+    return;
+  }
+  if (addr <= 0x3FFF) {
+    if (is_mbc5) {
+      mem->mbc.rom_bank_hi = val & 0x01;
     }
     return;
   }
@@ -98,15 +115,16 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
     if (is_mbc1) {
       if (mem->mbc.banking_mode == 0) {
         mem->mbc.rom_bank = (mem->mbc.rom_bank & 0x1F) | ((val & 0x03) << 5);
-        if (mem->mbc.rom_bank == 0)
-          mem->mbc.rom_bank = 1;
+        if ((mem->mbc.rom_bank & 0x1F) == 0)
+          mem->mbc.rom_bank |= 1;
       } else {
         mem->mbc.ram_bank = val & 0x03;
       }
     } else if (is_mbc3) {
-      if (val <= 0x03) {
+      if (val <= 0x03)
         mem->mbc.ram_bank = val;
-      }
+    } else if (is_mbc5) {
+      mem->mbc.ram_bank = val & 0x0F;
     }
     return;
   }
@@ -129,6 +147,8 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
           bank = mem->mbc.ram_bank;
         else
           return;
+      } else if (mbc >= 0x19 && mbc <= 0x1E) {
+        bank = mem->mbc.ram_bank;
       } else {
         bank = mem->mbc.banking_mode ? mem->mbc.ram_bank : 0;
       }
@@ -165,6 +185,15 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
   }
   if (addr >= 0xFF10 && addr <= 0xFF3F) {
     apu_write((struct GB *)mem->gb_ptr, addr, val);
+    return;
+  }
+  if (addr == 0xFF02) {
+    mem->io[0x02] = val;
+    if ((val & 0x81) == 0x81) {
+      mem->io[0x01] = 0xFF;
+      mem->io[0x02] &= 0x7F;
+      mem->io[0x0F] |= 0x08;
+    }
     return;
   }
   if (addr == 0xFF04) {

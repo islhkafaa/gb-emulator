@@ -1,6 +1,7 @@
 #include "../include/gb.h"
 #include "../include/ppu.h"
 #include "../include/rom.h"
+#include "../include/savestate.h"
 #include "../include/timer.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
@@ -59,9 +60,8 @@ int gb_init(GB *gb, const char *path) {
 
   if (gb->rom) {
     u8 type = gb->rom[0x0147];
-    if (type == 0x03 || type == 0x06 || type == 0x09 || type == 0x0F ||
-        type == 0x10 || type == 0x13 || type == 0x1B || type == 0x1E ||
-        type == 0xFF) {
+    if (type == 0x03 || type == 0x06 || type == 0x09 || type == 0x10 ||
+        type == 0x13 || type == 0x1B || type == 0x1E || type == 0xFF) {
       ram_load(gb->rom_path, gb->mem.ext_ram, MEM_EXT_RAM_SIZE);
     }
   }
@@ -109,6 +109,10 @@ void gb_run(GB *gb) {
       if (event.type == SDL_KEYDOWN) {
         if (event.key.keysym.sym == SDLK_ESCAPE) {
           gb->running = FALSE;
+        } else if (event.key.keysym.sym == SDLK_F5) {
+          gb_savestate(gb);
+        } else if (event.key.keysym.sym == SDLK_F8) {
+          gb_loadstate(gb);
         } else {
           joypad_press(gb, event.key.keysym.sym);
         }
@@ -130,9 +134,8 @@ void gb_run(GB *gb) {
 void gb_quit(GB *gb) {
   if (gb->rom) {
     u8 type = gb->rom[0x0147];
-    if (type == 0x03 || type == 0x06 || type == 0x09 || type == 0x0F ||
-        type == 0x10 || type == 0x13 || type == 0x1B || type == 0x1E ||
-        type == 0xFF) {
+    if (type == 0x03 || type == 0x06 || type == 0x09 || type == 0x10 ||
+        type == 0x13 || type == 0x1B || type == 0x1E || type == 0xFF) {
       ram_save(gb->rom_path, gb->mem.ext_ram, MEM_EXT_RAM_SIZE);
     }
   }

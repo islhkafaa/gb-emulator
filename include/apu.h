@@ -19,6 +19,12 @@ typedef struct {
   int length_timer;
   int length_enabled;
   int duty_pos;
+  int sweep_period;
+  int sweep_shift;
+  u8 sweep_negate;
+  int sweep_timer;
+  u8 sweep_enabled;
+  int shadow_period;
 } SquareChannel;
 
 typedef struct {
