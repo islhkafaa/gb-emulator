@@ -6,8 +6,6 @@ static const u32 PALETTE[4] = {0xFF9BBC0F, 0xFF8BAC0F, 0xFF306230, 0xFF0F380F};
 
 void ppu_render_scanline(GB *gb) {
   u8 lcdc = bus_read(&gb->mem, gb->rom, 0xFF40);
-  if ((lcdc & 0x01) == 0)
-    return;
 
   u8 scy = bus_read(&gb->mem, gb->rom, 0xFF42);
   u8 scx = bus_read(&gb->mem, gb->rom, 0xFF43);
@@ -15,31 +13,46 @@ void ppu_render_scanline(GB *gb) {
   u8 bgp = bus_read(&gb->mem, gb->rom, 0xFF47);
 
   u16 tile_map = (lcdc & 0x08) ? 0x9C00 : 0x9800;
-  u16 tile_data = (lcdc & 0x10) ? 0x8000 : 0x8800;
   int is_signed = !(lcdc & 0x10);
 
-  u8 y_pos = scy + ly;
-  u16 tile_row = (y_pos / 8) * 32;
+  u8 wy = bus_read(&gb->mem, gb->rom, 0xFF4A);
+  u8 wx = bus_read(&gb->mem, gb->rom, 0xFF4B);
 
   for (int pixel = 0; pixel < 160; pixel++) {
-    u8 x_pos = scx + pixel;
-    u16 map_offset = tile_map + tile_row + (x_pos / 8);
+    u8 color_idx = 0;
 
-    i16 tile_num = bus_read(&gb->mem, gb->rom, map_offset);
-    if (is_signed && tile_num < 128) {
-      tile_num += 256;
+    if ((lcdc & 0x20) && ly >= wy && (pixel + 7 >= wx)) {
+      int win_x = pixel - (wx - 7);
+      int win_y = ly - wy;
+      u16 win_tile_map = (lcdc & 0x40) ? 0x9C00 : 0x9800;
+      u16 win_offset = win_tile_map + (win_y / 8) * 32 + (win_x / 8);
+
+      u8 tile_num = bus_read(&gb->mem, gb->rom, win_offset);
+      u16 tile_addr =
+          is_signed ? (0x9000 + (i8)tile_num * 16) : (0x8000 + tile_num * 16);
+      u8 win_line = (win_y % 8) * 2;
+      u8 wd1 = bus_read(&gb->mem, gb->rom, tile_addr + win_line);
+      u8 wd2 = bus_read(&gb->mem, gb->rom, tile_addr + win_line + 1);
+
+      int win_bit = 7 - (win_x % 8);
+      color_idx = ((wd2 >> win_bit) & 1) << 1 | ((wd1 >> win_bit) & 1);
+    } else if (lcdc & 0x01) {
+      u8 x_pos = scx + pixel;
+      u8 y_pos = scy + ly;
+      u16 offset = tile_map + (y_pos / 8) * 32 + (x_pos / 8);
+
+      u8 tile_num = bus_read(&gb->mem, gb->rom, offset);
+      u16 tile_addr =
+          is_signed ? (0x9000 + (i8)tile_num * 16) : (0x8000 + tile_num * 16);
+      u8 line = (y_pos % 8) * 2;
+      u8 data1 = bus_read(&gb->mem, gb->rom, tile_addr + line);
+      u8 data2 = bus_read(&gb->mem, gb->rom, tile_addr + line + 1);
+
+      int bit = 7 - (x_pos % 8);
+      color_idx = ((data2 >> bit) & 1) << 1 | ((data1 >> bit) & 1);
     }
 
-    u16 tile_addr = tile_data + (tile_num * 16);
-    u8 line = (y_pos % 8) * 2;
-    u8 data1 = bus_read(&gb->mem, gb->rom, tile_addr + line);
-    u8 data2 = bus_read(&gb->mem, gb->rom, tile_addr + line + 1);
-
-    int color_bit = 7 - (x_pos % 8);
-    int color_idx =
-        ((data2 >> color_bit) & 1) << 1 | ((data1 >> color_bit) & 1);
     int mapped_col = (bgp >> (color_idx * 2)) & 0x03;
-
     gb->ppu.frame_buffer[ly * 160 + pixel] = PALETTE[mapped_col];
   }
 

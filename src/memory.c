@@ -30,7 +30,16 @@ u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
   }
   if (addr <= MEM_EXT_RAM_END) {
     if (mem->mbc.ram_enable) {
-      u16 bank = mem->mbc.banking_mode ? mem->mbc.ram_bank : 0;
+      u8 mbc = mem->mbc.type;
+      u16 bank = 0;
+      if (mbc >= 0x0F && mbc <= 0x13) {
+        if (mem->mbc.ram_bank <= 0x03)
+          bank = mem->mbc.ram_bank;
+        else
+          return 0xFF;
+      } else {
+        bank = mem->mbc.banking_mode ? mem->mbc.ram_bank : 0;
+      }
       return mem->ext_ram[(bank * 0x2000) + (addr - MEM_EXT_RAM_START)];
     }
     return 0xFF;
@@ -50,7 +59,7 @@ u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
   if (addr == 0xFF00) {
     return joypad_read((struct GB *)mem->gb_ptr);
   }
-  if (addr >= 0xFF10 && addr <= 0xFF26) {
+  if (addr >= 0xFF10 && addr <= 0xFF3F) {
     return apu_read((struct GB *)mem->gb_ptr, addr);
   }
   if (addr <= MEM_IO_END) {
@@ -63,22 +72,30 @@ u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
 }
 
 void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
+  u8 mbc = mem->mbc.type;
+  int is_mbc1 = (mbc >= 0x01 && mbc <= 0x03);
+  int is_mbc3 = (mbc >= 0x0F && mbc <= 0x13);
+
   if (addr <= 0x1FFF) {
-    if (mem->mbc.type >= 1 && mem->mbc.type <= 3) {
+    if (is_mbc1 || is_mbc3) {
       mem->mbc.ram_enable = ((val & 0x0F) == 0x0A) ? 1 : 0;
     }
     return;
   }
   if (addr <= 0x3FFF) {
-    if (mem->mbc.type >= 1 && mem->mbc.type <= 3) {
+    if (is_mbc1) {
       mem->mbc.rom_bank = (mem->mbc.rom_bank & 0xE0) | (val & 0x1F);
+      if (mem->mbc.rom_bank == 0)
+        mem->mbc.rom_bank = 1;
+    } else if (is_mbc3) {
+      mem->mbc.rom_bank = val & 0x7F;
       if (mem->mbc.rom_bank == 0)
         mem->mbc.rom_bank = 1;
     }
     return;
   }
   if (addr <= 0x5FFF) {
-    if (mem->mbc.type >= 1 && mem->mbc.type <= 3) {
+    if (is_mbc1) {
       if (mem->mbc.banking_mode == 0) {
         mem->mbc.rom_bank = (mem->mbc.rom_bank & 0x1F) | ((val & 0x03) << 5);
         if (mem->mbc.rom_bank == 0)
@@ -86,11 +103,15 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
       } else {
         mem->mbc.ram_bank = val & 0x03;
       }
+    } else if (is_mbc3) {
+      if (val <= 0x03) {
+        mem->mbc.ram_bank = val;
+      }
     }
     return;
   }
   if (addr <= 0x7FFF) {
-    if (mem->mbc.type >= 1 && mem->mbc.type <= 3) {
+    if (is_mbc1) {
       mem->mbc.banking_mode = val & 0x01;
     }
     return;
@@ -101,7 +122,16 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
   }
   if (addr <= MEM_EXT_RAM_END) {
     if (mem->mbc.ram_enable) {
-      u16 bank = mem->mbc.banking_mode ? mem->mbc.ram_bank : 0;
+      u8 mbc = mem->mbc.type;
+      u16 bank = 0;
+      if (mbc >= 0x0F && mbc <= 0x13) {
+        if (mem->mbc.ram_bank <= 0x03)
+          bank = mem->mbc.ram_bank;
+        else
+          return;
+      } else {
+        bank = mem->mbc.banking_mode ? mem->mbc.ram_bank : 0;
+      }
       mem->ext_ram[(bank * 0x2000) + (addr - MEM_EXT_RAM_START)] = val;
     }
     return;
