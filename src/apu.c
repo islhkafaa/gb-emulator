@@ -175,11 +175,8 @@ void apu_step(GB *gb, int m_cycles) {
       if (apu->ch3.enabled && apu->ch3.dac_enabled && (apu->nr51 & 0x44)) {
         u8 b = apu->ch3.wave_ram[apu->ch3.sample_pos / 2];
         u8 sample = (apu->ch3.sample_pos & 1) ? (b & 0x0F) : (b >> 4);
-        if (apu->ch3.volume_shift > 0) {
-          sample >>= (apu->ch3.volume_shift - 1);
-        } else {
-          sample = 0;
-        }
+        static const int VOL_SHIFT[4] = {4, 0, 1, 2};
+        sample >>= VOL_SHIFT[apu->ch3.volume_shift & 0x03];
         float amt = ((float)sample / 15.0f - 0.5f) * 0.25f;
         if (apu->nr51 & 0x40)
           out_l += amt;
@@ -302,7 +299,12 @@ void apu_write(GB *gb, u16 addr, u8 val) {
     apu->ch1.period = (apu->ch1.period & 0x0700) | val;
   } else if (addr == 0xFF14) {
     apu->ch1.period = (apu->ch1.period & 0x00FF) | ((val & 0x07) << 8);
+    bool_t was_len_enabled = apu->ch1.length_enabled;
     apu->ch1.length_enabled = (val & 0x40) != 0;
+    if (!was_len_enabled && apu->ch1.length_enabled && (apu->cycles & 1) != 0) {
+      if (apu->ch1.length_timer > 0 && --apu->ch1.length_timer == 0)
+        apu->ch1.enabled = 0;
+    }
     if (val & 0x80) {
       apu->ch1.enabled = 1;
       if (apu->ch1.length_timer == 0)
@@ -335,7 +337,12 @@ void apu_write(GB *gb, u16 addr, u8 val) {
     apu->ch2.period = (apu->ch2.period & 0x0700) | val;
   } else if (addr == 0xFF19) {
     apu->ch2.period = (apu->ch2.period & 0x00FF) | ((val & 0x07) << 8);
+    bool_t was_len_enabled = apu->ch2.length_enabled;
     apu->ch2.length_enabled = (val & 0x40) != 0;
+    if (!was_len_enabled && apu->ch2.length_enabled && (apu->cycles & 1) != 0) {
+      if (apu->ch2.length_timer > 0 && --apu->ch2.length_timer == 0)
+        apu->ch2.enabled = 0;
+    }
     if (val & 0x80) {
       apu->ch2.enabled = 1;
       if (apu->ch2.length_timer == 0)
@@ -358,7 +365,12 @@ void apu_write(GB *gb, u16 addr, u8 val) {
     apu->ch3.period = (apu->ch3.period & 0x0700) | val;
   } else if (addr == 0xFF1E) {
     apu->ch3.period = (apu->ch3.period & 0x00FF) | ((val & 0x07) << 8);
+    bool_t was_len_enabled = apu->ch3.length_enabled;
     apu->ch3.length_enabled = (val & 0x40) != 0;
+    if (!was_len_enabled && apu->ch3.length_enabled && (apu->cycles & 1) != 0) {
+      if (apu->ch3.length_timer > 0 && --apu->ch3.length_timer == 0)
+        apu->ch3.enabled = 0;
+    }
     if (val & 0x80) {
       if (apu->ch3.dac_enabled)
         apu->ch3.enabled = 1;
@@ -380,7 +392,12 @@ void apu_write(GB *gb, u16 addr, u8 val) {
     apu->ch4.width_mode = (val & 0x08) != 0;
     apu->ch4.divisor_code = val & 0x07;
   } else if (addr == 0xFF23) {
+    bool_t was_len_enabled = apu->ch4.length_enabled;
     apu->ch4.length_enabled = (val & 0x40) != 0;
+    if (!was_len_enabled && apu->ch4.length_enabled && (apu->cycles & 1) != 0) {
+      if (apu->ch4.length_timer > 0 && --apu->ch4.length_timer == 0)
+        apu->ch4.enabled = 0;
+    }
     if (val & 0x80) {
       apu->ch4.enabled = 1;
       if (apu->ch4.length_timer == 0)

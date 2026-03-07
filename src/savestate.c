@@ -3,7 +3,7 @@
 #include <string.h>
 
 #define STATE_MAGIC 0x47425353
-#define STATE_VERSION 1
+#define STATE_VERSION 2
 
 typedef struct {
   u32 magic;
@@ -18,6 +18,7 @@ typedef struct {
   Joypad joypad;
   int div_counter;
   int timer_counter;
+  int tima_overflow_delay;
 } SaveData;
 
 static void state_path(const GB *gb, char *out, size_t len) {
@@ -45,6 +46,7 @@ void gb_savestate(GB *gb) {
   sd.joypad = gb->joypad;
   sd.div_counter = gb->div_counter;
   sd.timer_counter = gb->timer_counter;
+  sd.tima_overflow_delay = gb->tima_overflow_delay;
   sd.mem.gb_ptr = NULL;
 
   SDL_AudioDeviceID dev = sd.apu.device;
@@ -91,6 +93,7 @@ void gb_loadstate(GB *gb) {
   gb->joypad = sd.joypad;
   gb->div_counter = sd.div_counter;
   gb->timer_counter = sd.timer_counter;
+  gb->tima_overflow_delay = sd.tima_overflow_delay;
 
   gb->apu.device = dev;
   gb->mem.gb_ptr = gb_ptr;

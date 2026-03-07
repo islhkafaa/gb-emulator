@@ -40,8 +40,8 @@ void ppu_render_scanline(GB *gb) {
       int win_bit = 7 - (win_x % 8);
       color_idx = ((wd2 >> win_bit) & 1) << 1 | ((wd1 >> win_bit) & 1);
     } else if (lcdc & 0x01) {
-      u8 x_pos = scx + pixel;
-      u8 y_pos = scy + ly;
+      u8 x_pos = (scx + pixel) & 0xFF;
+      u8 y_pos = (scy + ly) & 0xFF;
       u16 offset = tile_map + (y_pos / 8) * 32 + (x_pos / 8);
 
       u8 tile_num = bus_read(&gb->mem, gb->rom, offset);
@@ -105,12 +105,19 @@ void ppu_render_scanline(GB *gb) {
     u8 tile_num = (u8)sprites[s].tile;
     u8 flags = (u8)sprites[s].flags;
 
-    if (obj_size == 16)
-      tile_num &= 0xFE;
-
     int line = ly - obj_y;
     if (flags & 0x40)
       line = (obj_size - 1) - line;
+
+    if (obj_size == 16) {
+      if (line < 8) {
+        tile_num &= 0xFE;
+      } else {
+        tile_num |= 0x01;
+        line -= 8;
+      }
+    }
+
     line *= 2;
 
     u16 tile_addr = 0x8000 + (tile_num * 16) + line;

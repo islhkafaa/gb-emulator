@@ -62,7 +62,8 @@ int gb_init(GB *gb, const char *path) {
     u8 type = gb->rom[0x0147];
     if (type == 0x03 || type == 0x06 || type == 0x09 || type == 0x10 ||
         type == 0x13 || type == 0x1B || type == 0x1E || type == 0xFF) {
-      ram_load(gb->rom_path, gb->mem.ext_ram, MEM_EXT_RAM_SIZE);
+      ram_load(gb->rom_path, gb->mem.ext_ram,
+               type == 0x06 ? 512 : MEM_EXT_RAM_SIZE);
     }
   }
 
@@ -136,7 +137,8 @@ void gb_quit(GB *gb) {
     u8 type = gb->rom[0x0147];
     if (type == 0x03 || type == 0x06 || type == 0x09 || type == 0x10 ||
         type == 0x13 || type == 0x1B || type == 0x1E || type == 0xFF) {
-      ram_save(gb->rom_path, gb->mem.ext_ram, MEM_EXT_RAM_SIZE);
+      ram_save(gb->rom_path, gb->mem.ext_ram,
+               type == 0x06 ? 512 : MEM_EXT_RAM_SIZE);
     }
   }
 

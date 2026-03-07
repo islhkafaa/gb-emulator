@@ -5,6 +5,15 @@
 void timer_tick(struct GB *gb, int m_cycles) {
   int t_cycles = m_cycles * 4;
 
+  if (gb->tima_overflow_delay > 0) {
+    gb->tima_overflow_delay -= t_cycles;
+    if (gb->tima_overflow_delay <= 0) {
+      gb->mem.io[0x05] = gb->mem.io[0x06];
+      cpu_request_interrupt(gb, INT_TIMER);
+      gb->tima_overflow_delay = 0;
+    }
+  }
+
   u16 old_div = gb->div_counter;
   gb->div_counter += t_cycles;
   gb->mem.io[0x04] = gb->div_counter >> 8;
@@ -19,8 +28,8 @@ void timer_tick(struct GB *gb, int m_cycles) {
 
     if (old_bit && !new_bit) {
       if (gb->mem.io[0x05] == 0xFF) {
-        gb->mem.io[0x05] = gb->mem.io[0x06];
-        cpu_request_interrupt(gb, INT_TIMER);
+        gb->mem.io[0x05] = 0;
+        gb->tima_overflow_delay = 4;
       } else {
         gb->mem.io[0x05]++;
       }

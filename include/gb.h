@@ -28,6 +28,7 @@ typedef struct GB {
   Joypad joypad;
   int div_counter;
   int timer_counter;
+  int tima_overflow_delay;
   char rom_path[1024];
 } GB;
 

@@ -222,6 +222,11 @@ static int execute_cb(struct GB *gb) {
 }
 
 int cpu_step(struct GB *gb) {
+  if (gb->cpu.ime_pending) {
+    gb->cpu.ime_pending = FALSE;
+    gb->cpu.ime = TRUE;
+  }
+
   u8 ie = bus_read(&gb->mem, gb->rom, 0xFFFF);
   u8 if_flag = bus_read(&gb->mem, gb->rom, 0xFF0F);
   u8 pending = ie & if_flag & 0x1F;
@@ -1400,7 +1405,7 @@ int cpu_step(struct GB *gb) {
     return 16;
 
   case 0xFB:
-    gb->cpu.ime = TRUE;
+    gb->cpu.ime_pending = TRUE;
     return 4;
 
   case 0xFE:
