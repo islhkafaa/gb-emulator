@@ -1,6 +1,7 @@
 #ifndef GB_H
 #define GB_H
 
+#include "cpu.h"
 #include "memory.h"
 #include "types.h"
 #include <SDL2/SDL.h>
@@ -10,13 +11,14 @@
 #define GB_HEIGHT 144
 #define GB_SCALE 4
 
-typedef struct {
+typedef struct GB {
   SDL_Window *window;
   SDL_Renderer *renderer;
   bool_t running;
   Memory mem;
   u8 *rom;
   size_t rom_size;
+  CPU cpu;
 } GB;
 
 int gb_init(GB *gb);

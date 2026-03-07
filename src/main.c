@@ -1,6 +1,7 @@
 #include "../include/gb.h"
 #include "../include/rom.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
@@ -8,23 +9,29 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  GB gb = {0};
-
-  if (!rom_load(argv[1], &gb.rom, &gb.rom_size)) {
+  GB *gb = calloc(1, sizeof(GB));
+  if (!gb) {
     return 1;
   }
 
-  rom_print_header(gb.rom);
+  if (!rom_load(argv[1], &gb->rom, &gb->rom_size)) {
+    free(gb);
+    return 1;
+  }
 
-  if (!gb_init(&gb)) {
+  rom_print_header(gb->rom);
+
+  if (!gb_init(gb)) {
     fprintf(stderr, "gb_init failed\n");
-    rom_free(gb.rom);
+    rom_free(gb->rom);
+    free(gb);
     return 1;
   }
 
-  gb_run(&gb);
-  gb_quit(&gb);
-  rom_free(gb.rom);
+  gb_run(gb);
+  gb_quit(gb);
+  rom_free(gb->rom);
+  free(gb);
 
   return 0;
 }
