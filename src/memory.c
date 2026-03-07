@@ -1,4 +1,7 @@
 #include "../include/memory.h"
+#include "../include/joypad.h"
+
+struct GB;
 
 u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
   if (addr <= MEM_ROM_BANKN_END) {
@@ -21,6 +24,9 @@ u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
   }
   if (addr <= MEM_UNUSABLE_END) {
     return 0xFF;
+  }
+  if (addr == 0xFF00) {
+    return joypad_read((struct GB *)mem->gb_ptr);
   }
   if (addr <= MEM_IO_END) {
     return mem->io[addr - MEM_IO_START];
@@ -64,6 +70,10 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
       mem->oam[i] = bus_read(mem, rom, src + i);
     }
     mem->io[addr - MEM_IO_START] = val;
+    return;
+  }
+  if (addr == 0xFF00) {
+    joypad_write((struct GB *)mem->gb_ptr, val);
     return;
   }
   if (addr <= MEM_IO_END) {

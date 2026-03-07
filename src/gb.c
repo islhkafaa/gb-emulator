@@ -46,6 +46,10 @@ int gb_init(GB *gb) {
 
   cpu_init(&gb->cpu);
 
+  gb->mem.gb_ptr = gb;
+  gb->joypad.action_keys = 0x0F;
+  gb->joypad.dir_keys = 0x0F;
+
   gb->running = TRUE;
   return 1;
 }
@@ -70,8 +74,15 @@ void gb_run(GB *gb) {
       if (event.type == SDL_QUIT) {
         gb->running = FALSE;
       }
-      if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
-        gb->running = FALSE;
+      if (event.type == SDL_KEYDOWN) {
+        if (event.key.keysym.sym == SDLK_ESCAPE) {
+          gb->running = FALSE;
+        } else {
+          joypad_press(gb, event.key.keysym.sym);
+        }
+      }
+      if (event.type == SDL_KEYUP) {
+        joypad_release(gb, event.key.keysym.sym);
       }
     }
 

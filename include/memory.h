@@ -40,6 +40,7 @@ typedef struct {
   u8 io[MEM_IO_SIZE];
   u8 hram[MEM_HRAM_SIZE];
   u8 ie;
+  void *gb_ptr;
 } Memory;
 
 u8 bus_read(Memory *mem, const u8 *rom, u16 addr);

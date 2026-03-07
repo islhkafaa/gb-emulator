@@ -2,6 +2,7 @@
 #define GB_H
 
 #include "cpu.h"
+#include "joypad.h"
 #include "memory.h"
 #include "ppu.h"
 #include "types.h"
@@ -22,6 +23,7 @@ typedef struct GB {
   size_t rom_size;
   CPU cpu;
   PPU ppu;
+  Joypad joypad;
   int div_counter;
   int timer_counter;
 } GB;

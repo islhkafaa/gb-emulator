@@ -42,6 +42,65 @@ void ppu_render_scanline(GB *gb) {
 
     gb->ppu.frame_buffer[ly * 160 + pixel] = PALETTE[mapped_col];
   }
+
+  if ((lcdc & 0x02) == 0)
+    return;
+
+  int obj_size = (lcdc & 0x04) ? 16 : 8;
+  int obj_count = 0;
+
+  for (u16 oam_addr = 0xFE00; oam_addr < 0xFEA0; oam_addr += 4) {
+    if (obj_count >= 10)
+      break;
+
+    int obj_y = bus_read(&gb->mem, gb->rom, oam_addr) - 16;
+    int obj_x = bus_read(&gb->mem, gb->rom, oam_addr + 1) - 8;
+    u8 tile_num = bus_read(&gb->mem, gb->rom, oam_addr + 2);
+    u8 flags = bus_read(&gb->mem, gb->rom, oam_addr + 3);
+
+    if (ly >= obj_y && ly < (obj_y + obj_size)) {
+      obj_count++;
+
+      if (obj_size == 16) {
+        tile_num &= 0xFE;
+      }
+
+      int line = ly - obj_y;
+      if (flags & 0x40) {
+        line = (obj_size - 1) - line;
+      }
+      line *= 2;
+
+      u16 tile_addr = 0x8000 + (tile_num * 16) + line;
+      u8 data1 = bus_read(&gb->mem, gb->rom, tile_addr);
+      u8 data2 = bus_read(&gb->mem, gb->rom, tile_addr + 1);
+
+      u8 pal = (flags & 0x10) ? bus_read(&gb->mem, gb->rom, 0xFF49)
+                              : bus_read(&gb->mem, gb->rom, 0xFF48);
+
+      for (int p_x = 0; p_x < 8; p_x++) {
+        int screen_x = obj_x + p_x;
+        if (screen_x < 0 || screen_x >= 160)
+          continue;
+
+        int color_bit = (flags & 0x20) ? p_x : 7 - p_x;
+        int color_idx =
+            ((data2 >> color_bit) & 1) << 1 | ((data1 >> color_bit) & 1);
+
+        if (color_idx == 0)
+          continue;
+
+        if ((flags & 0x80) != 0) {
+          u32 current_bg = gb->ppu.frame_buffer[ly * 160 + screen_x];
+          if (current_bg != PALETTE[(bgp & 0x03)])
+            continue;
+        }
+
+        int mapped_col = (pal >> (color_idx * 2)) & 0x03;
+        gb->ppu.frame_buffer[ly * 160 + screen_x] = PALETTE[mapped_col];
+      }
+    }
+  }
 }
 
 void ppu_step(GB *gb, int m_cycles) {
