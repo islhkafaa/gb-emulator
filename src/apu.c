@@ -152,7 +152,7 @@ void apu_step(GB *gb, int m_cycles) {
     float out_r = 0.0f;
 
     if (apu->nr52 & 0x80) {
-      if (apu->ch1.enabled && (apu->nr51 & 0x11)) {
+      if (apu->ch1.enabled && apu->ch1.dac_enabled && (apu->nr51 & 0x11)) {
         float s = DUTY_TABLE[apu->ch1.duty][apu->ch1.duty_pos] ? 1.0f : -1.0f;
         float v = (float)apu->ch1.volume / 15.0f;
         float amt = s * v * 0.25f;
@@ -162,7 +162,7 @@ void apu_step(GB *gb, int m_cycles) {
           out_r += amt;
       }
 
-      if (apu->ch2.enabled && (apu->nr51 & 0x22)) {
+      if (apu->ch2.enabled && apu->ch2.dac_enabled && (apu->nr51 & 0x22)) {
         float s = DUTY_TABLE[apu->ch2.duty][apu->ch2.duty_pos] ? 1.0f : -1.0f;
         float v = (float)apu->ch2.volume / 15.0f;
         float amt = s * v * 0.25f;
@@ -184,7 +184,7 @@ void apu_step(GB *gb, int m_cycles) {
           out_r += amt;
       }
 
-      if (apu->ch4.enabled && (apu->nr51 & 0x88)) {
+      if (apu->ch4.enabled && apu->ch4.dac_enabled && (apu->nr51 & 0x88)) {
         float s = (apu->ch4.lfsr & 1) ? -1.0f : 1.0f;
         float v = (float)apu->ch4.volume / 15.0f;
         float amt = s * v * 0.25f;
@@ -295,6 +295,9 @@ void apu_write(GB *gb, u16 addr, u8 val) {
     apu->ch1.initial_volume = val >> 4;
     apu->ch1.envelope_add = (val & 0x08) != 0;
     apu->ch1.envelope_period = val & 0x07;
+    apu->ch1.dac_enabled = (val & 0xF8) != 0;
+    if (!apu->ch1.dac_enabled)
+      apu->ch1.enabled = 0;
   } else if (addr == 0xFF13) {
     apu->ch1.period = (apu->ch1.period & 0x0700) | val;
   } else if (addr == 0xFF14) {
@@ -306,7 +309,8 @@ void apu_write(GB *gb, u16 addr, u8 val) {
         apu->ch1.enabled = 0;
     }
     if (val & 0x80) {
-      apu->ch1.enabled = 1;
+      if (apu->ch1.dac_enabled)
+        apu->ch1.enabled = 1;
       if (apu->ch1.length_timer == 0)
         apu->ch1.length_timer = 64;
       apu->ch1.timer = (2048 - apu->ch1.period) * 4;
@@ -333,6 +337,9 @@ void apu_write(GB *gb, u16 addr, u8 val) {
     apu->ch2.initial_volume = val >> 4;
     apu->ch2.envelope_add = (val & 0x08) != 0;
     apu->ch2.envelope_period = val & 0x07;
+    apu->ch2.dac_enabled = (val & 0xF8) != 0;
+    if (!apu->ch2.dac_enabled)
+      apu->ch2.enabled = 0;
   } else if (addr == 0xFF18) {
     apu->ch2.period = (apu->ch2.period & 0x0700) | val;
   } else if (addr == 0xFF19) {
@@ -344,7 +351,8 @@ void apu_write(GB *gb, u16 addr, u8 val) {
         apu->ch2.enabled = 0;
     }
     if (val & 0x80) {
-      apu->ch2.enabled = 1;
+      if (apu->ch2.dac_enabled)
+        apu->ch2.enabled = 1;
       if (apu->ch2.length_timer == 0)
         apu->ch2.length_timer = 64;
       apu->ch2.timer = (2048 - apu->ch2.period) * 4;
@@ -387,6 +395,9 @@ void apu_write(GB *gb, u16 addr, u8 val) {
     apu->ch4.initial_volume = val >> 4;
     apu->ch4.envelope_add = (val & 0x08) != 0;
     apu->ch4.envelope_period = val & 0x07;
+    apu->ch4.dac_enabled = (val & 0xF8) != 0;
+    if (!apu->ch4.dac_enabled)
+      apu->ch4.enabled = 0;
   } else if (addr == 0xFF22) {
     apu->ch4.clock_shift = val >> 4;
     apu->ch4.width_mode = (val & 0x08) != 0;
@@ -399,7 +410,8 @@ void apu_write(GB *gb, u16 addr, u8 val) {
         apu->ch4.enabled = 0;
     }
     if (val & 0x80) {
-      apu->ch4.enabled = 1;
+      if (apu->ch4.dac_enabled)
+        apu->ch4.enabled = 1;
       if (apu->ch4.length_timer == 0)
         apu->ch4.length_timer = 64;
       apu->ch4.volume = apu->ch4.initial_volume;

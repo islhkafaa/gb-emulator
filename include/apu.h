@@ -8,6 +8,7 @@ struct GB;
 
 typedef struct {
   u8 enabled;
+  u8 dac_enabled;
   u8 duty;
   int timer;
   int period;
@@ -41,6 +42,7 @@ typedef struct {
 
 typedef struct {
   u8 enabled;
+  u8 dac_enabled;
   int timer;
   int length_timer;
   int length_enabled;

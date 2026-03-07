@@ -248,8 +248,40 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
     return;
   }
   if (addr == 0xFF04) {
-    ((struct GB *)mem->gb_ptr)->div_counter = 0;
+    struct GB *gb = (struct GB *)mem->gb_ptr;
+    u8 tac = mem->io[0x07];
+    if (tac & 0x04) {
+      int freq_shifts[] = {9, 3, 5, 7};
+      int shift = freq_shifts[tac & 0x03];
+      if ((gb->div_counter >> shift) & 1) {
+        if (mem->io[0x05] == 0xFF) {
+          mem->io[0x05] = 0;
+          gb->tima_overflow_delay = 4;
+        } else {
+          mem->io[0x05]++;
+        }
+      }
+    }
+    gb->div_counter = 0;
     mem->io[0x04] = 0;
+    return;
+  }
+  if (addr == 0xFF07) {
+    struct GB *gb = (struct GB *)mem->gb_ptr;
+    u8 old_tac = mem->io[0x07];
+    mem->io[0x07] = val;
+    if ((old_tac & 0x04) && !(val & 0x04)) {
+      int freq_shifts[] = {9, 3, 5, 7};
+      int shift = freq_shifts[old_tac & 0x03];
+      if ((gb->div_counter >> shift) & 1) {
+        if (mem->io[0x05] == 0xFF) {
+          mem->io[0x05] = 0;
+          gb->tima_overflow_delay = 4;
+        } else {
+          mem->io[0x05]++;
+        }
+      }
+    }
     return;
   }
   if (addr <= MEM_IO_END) {
