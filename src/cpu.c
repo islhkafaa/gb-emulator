@@ -17,7 +17,11 @@ void cpu_init(CPU *cpu) {
 
 static u8 fetch8(struct GB *gb) {
   u8 val = bus_read(&gb->mem, gb->rom, gb->cpu.pc);
-  gb->cpu.pc++;
+  if (gb->cpu.halt_bug) {
+    gb->cpu.halt_bug = FALSE;
+  } else {
+    gb->cpu.pc++;
+  }
   return val;
 }
 
@@ -876,9 +880,16 @@ int cpu_step(struct GB *gb) {
     gb->cpu.l = gb->cpu.a;
     return 4;
 
-  case 0x76:
-    gb->cpu.halted = TRUE;
+  case 0x76: {
+    u8 ie = bus_read(&gb->mem, gb->rom, 0xFFFF);
+    u8 if_flag = bus_read(&gb->mem, gb->rom, 0xFF0F);
+    if (!gb->cpu.ime && (ie & if_flag & 0x1F)) {
+      gb->cpu.halt_bug = TRUE;
+    } else {
+      gb->cpu.halted = TRUE;
+    }
     return 4;
+  }
 
   case 0x77:
     bus_write(&gb->mem, gb->rom, gb->cpu.hl, gb->cpu.a);

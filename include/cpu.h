@@ -43,6 +43,7 @@ typedef struct {
 
   bool_t ime;
   bool_t halted;
+  bool_t halt_bug;
 } CPU;
 
 struct GB;

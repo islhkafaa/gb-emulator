@@ -16,11 +16,42 @@ void memory_init(Memory *mem, const u8 *rom) {
   mem->mbc.ram_bank = 0;
   mem->mbc.ram_enable = 0;
   mem->mbc.banking_mode = 0;
+
+  mem->io[0x00] = 0xCF;
+  mem->io[0x04] = 0xAB;
+  mem->io[0x10] = 0x80;
+  mem->io[0x11] = 0xBF;
+  mem->io[0x12] = 0xF3;
+  mem->io[0x14] = 0xBF;
+  mem->io[0x16] = 0x3F;
+  mem->io[0x17] = 0x00;
+  mem->io[0x19] = 0xBF;
+  mem->io[0x1A] = 0x7F;
+  mem->io[0x1B] = 0xFF;
+  mem->io[0x1C] = 0x9F;
+  mem->io[0x1E] = 0xBF;
+  mem->io[0x20] = 0xFF;
+  mem->io[0x21] = 0x00;
+  mem->io[0x22] = 0x00;
+  mem->io[0x23] = 0xBF;
+  mem->io[0x24] = 0x77;
+  mem->io[0x25] = 0xF3;
+  mem->io[0x26] = 0xF1;
+  mem->io[0x40] = 0x91;
+  mem->io[0x41] = 0x85;
+  mem->io[0x47] = 0xFC;
 }
 
 u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
   if (addr <= MEM_ROM_BANK0_END) {
-    return rom ? rom[addr] : 0xFF;
+    if (!rom)
+      return 0xFF;
+    u8 mbc = mem->mbc.type;
+    u16 bank = 0;
+    if ((mbc >= 0x01 && mbc <= 0x03) && mem->mbc.banking_mode == 1) {
+      bank = (mem->mbc.ram_bank << 5);
+    }
+    return rom[(bank * 0x4000) + addr];
   }
   if (addr <= MEM_ROM_BANKN_END) {
     if (!rom)
@@ -48,6 +79,7 @@ u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
       } else {
         bank = mem->mbc.banking_mode ? mem->mbc.ram_bank : 0;
       }
+      bank %= (MEM_EXT_RAM_SIZE / 0x2000);
       return mem->ext_ram[(bank * 0x2000) + (addr - MEM_EXT_RAM_START)];
     }
     return 0xFF;
@@ -152,6 +184,7 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
       } else {
         bank = mem->mbc.banking_mode ? mem->mbc.ram_bank : 0;
       }
+      bank %= (MEM_EXT_RAM_SIZE / 0x2000);
       mem->ext_ram[(bank * 0x2000) + (addr - MEM_EXT_RAM_START)] = val;
     }
     return;

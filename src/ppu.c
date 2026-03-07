@@ -18,12 +18,15 @@ void ppu_render_scanline(GB *gb) {
   u8 wy = bus_read(&gb->mem, gb->rom, 0xFF4A);
   u8 wx = bus_read(&gb->mem, gb->rom, 0xFF4B);
 
+  bool_t window_drawn = FALSE;
+
   for (int pixel = 0; pixel < 160; pixel++) {
     u8 color_idx = 0;
 
     if ((lcdc & 0x20) && ly >= wy && (pixel + 7 >= wx)) {
+      window_drawn = TRUE;
       int win_x = pixel - (wx - 7);
-      int win_y = ly - wy;
+      int win_y = gb->ppu.window_line_counter;
       u16 win_tile_map = (lcdc & 0x40) ? 0x9C00 : 0x9800;
       u16 win_offset = win_tile_map + (win_y / 8) * 32 + (win_x / 8);
 
@@ -54,6 +57,10 @@ void ppu_render_scanline(GB *gb) {
 
     int mapped_col = (bgp >> (color_idx * 2)) & 0x03;
     gb->ppu.frame_buffer[ly * 160 + pixel] = PALETTE[mapped_col];
+  }
+
+  if (window_drawn) {
+    gb->ppu.window_line_counter++;
   }
 
   if ((lcdc & 0x02) == 0)
@@ -153,6 +160,7 @@ void ppu_step(GB *gb, int m_cycles) {
     gb->ppu.mode_clock = 0;
     gb->ppu.mode = PPU_MODE_HBLANK;
     gb->mem.io[0x44] = 0;
+    gb->ppu.window_line_counter = 0;
     stat = (stat & ~0x03) | PPU_MODE_HBLANK;
     gb->mem.io[0x41] = stat;
     return;
@@ -201,6 +209,7 @@ void ppu_step(GB *gb, int m_cycles) {
 
       if (ly > 153) {
         gb->ppu.mode = PPU_MODE_OAM;
+        gb->ppu.window_line_counter = 0;
         if (stat & 0x20)
           req_int = 1;
         ly = 0;
