@@ -29,9 +29,48 @@ void apu_init(GB *gb) {
 }
 
 void apu_quit(GB *gb) {
+  if (gb->apu.is_recording) {
+    apu_toggle_recording(gb);
+  }
   if (gb->apu.device != 0) {
     SDL_CloseAudioDevice(gb->apu.device);
     gb->apu.device = 0;
+  }
+}
+
+void apu_toggle_recording(GB *gb) {
+  APU *apu = &gb->apu;
+  if (!apu->is_recording) {
+    apu->wav_file = fopen("gb_audio_capture.wav", "wb");
+    if (!apu->wav_file) {
+      fprintf(stderr, "Failed to open gb_audio_capture.wav for recording\n");
+      return;
+    }
+    apu->wav_data_size = 0;
+
+    u8 header[44] = {'R',  'I',  'F',  'F',  0,    0,   0,    0,    'W',
+                     'A',  'V',  'E',  'f',  'm',  't', ' ',  16,   0,
+                     0,    0,    3,    0,    2,    0,   0x44, 0xAC, 0x00,
+                     0x00, 0x10, 0xB1, 0x05, 0x00, 8,   0,    32,   0,
+                     'd',  'a',  't',  'a',  0,    0,   0,    0};
+    fwrite(header, 1, 44, apu->wav_file);
+    apu->is_recording = TRUE;
+    printf("Started audio recording to gb_audio_capture.wav\n");
+  } else {
+    if (apu->wav_file) {
+      u32 chunk_size = 36 + apu->wav_data_size;
+      fseek(apu->wav_file, 4, SEEK_SET);
+      fwrite(&chunk_size, 4, 1, apu->wav_file);
+
+      fseek(apu->wav_file, 40, SEEK_SET);
+      fwrite(&apu->wav_data_size, 4, 1, apu->wav_file);
+
+      fclose(apu->wav_file);
+      apu->wav_file = NULL;
+    }
+    apu->is_recording = FALSE;
+    printf("Stopped audio recording. File size: %u bytes\n",
+           apu->wav_data_size + 44);
   }
 }
 
@@ -205,6 +244,10 @@ void apu_step(GB *gb, int m_cycles) {
       if (apu->device) {
         SDL_QueueAudio(apu->device, apu->sample_buffer, 1024 * sizeof(float));
       }
+      if (apu->is_recording && apu->wav_file) {
+        fwrite(apu->sample_buffer, sizeof(float), 1024, apu->wav_file);
+        apu->wav_data_size += sizeof(float) * 1024;
+      }
       apu->sample_count = 0;
     }
   }
@@ -314,6 +357,7 @@ void apu_write(GB *gb, u16 addr, u8 val) {
       if (apu->ch1.length_timer == 0)
         apu->ch1.length_timer = 64;
       apu->ch1.timer = (2048 - apu->ch1.period) * 4;
+      apu->ch1.duty_pos = 0;
       apu->ch1.volume = apu->ch1.initial_volume;
       apu->ch1.envelope_timer = apu->ch1.envelope_period;
       apu->ch1.shadow_period = apu->ch1.period;
@@ -356,6 +400,7 @@ void apu_write(GB *gb, u16 addr, u8 val) {
       if (apu->ch2.length_timer == 0)
         apu->ch2.length_timer = 64;
       apu->ch2.timer = (2048 - apu->ch2.period) * 4;
+      apu->ch2.duty_pos = 0;
       apu->ch2.volume = apu->ch2.initial_volume;
       apu->ch2.envelope_timer = apu->ch2.envelope_period;
     }

@@ -140,6 +140,7 @@ u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
 }
 
 void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
+  (void)rom;
   u8 mbc = mem->mbc.type;
   int is_mbc1 = (mbc >= 0x01 && mbc <= 0x03);
   int is_mbc3 = (mbc >= 0x0F && mbc <= 0x13);
@@ -193,7 +194,7 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
         mem->mbc.ram_bank = val & 0x03;
       }
     } else if (is_mbc3) {
-      if (val <= 0x03)
+      if (val <= 0x03 || (val >= 0x08 && val <= 0x0C))
         mem->mbc.ram_bank = val;
     } else if (is_mbc5) {
       mem->mbc.ram_bank = val & 0x0F;

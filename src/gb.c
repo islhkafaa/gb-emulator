@@ -125,6 +125,8 @@ void gb_run(GB *gb) {
           gb_savestate(gb);
         } else if (event.key.keysym.sym == SDLK_F8) {
           gb_loadstate(gb);
+        } else if (event.key.keysym.sym == SDLK_F9) {
+          apu_toggle_recording(gb);
         } else {
           joypad_press(gb, event.key.keysym.sym);
         }

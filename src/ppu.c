@@ -11,6 +11,9 @@ void ppu_render_scanline(GB *gb) {
   u8 ly = gb->mem.io[0x44];
   u8 bgp = gb->mem.io[0x47];
 
+  if (ly >= 144)
+    return;
+
   u16 tile_map = (lcdc & 0x08) ? 0x9C00 : 0x9800;
   int is_signed = !(lcdc & 0x10);
 
@@ -26,32 +29,41 @@ void ppu_render_scanline(GB *gb) {
     u8 color_idx = 0;
 
     if ((lcdc & 0x20) && ly >= wy && (pixel + 7 >= wx)) {
-      window_drawn = TRUE;
       int win_x = pixel - (wx - 7);
+      if (win_x < 0) {
+        goto draw_bg;
+      }
+      window_drawn = TRUE;
       int win_y = gb->ppu.window_line_counter;
       u16 win_tile_map = (lcdc & 0x40) ? 0x9C00 : 0x9800;
       u16 win_offset = win_tile_map + (win_y / 8) * 32 + (win_x / 8);
 
-      u8 tile_num = gb->mem.vram[win_offset - 0x8000];
-      u16 tile_addr =
-          is_signed ? (0x9000 + (i8)tile_num * 16) : (0x8000 + tile_num * 16);
+      u8 tile_num = gb->mem.vram[(win_offset - 0x8000) & (MEM_VRAM_SIZE - 1)];
+      u16 tile_addr = is_signed ? (u16)(0x9000 + (i8)tile_num * 16)
+                                : (u16)(0x8000 + tile_num * 16);
       u8 win_line = (win_y % 8) * 2;
-      u8 wd1 = gb->mem.vram[tile_addr - 0x8000 + win_line];
-      u8 wd2 = gb->mem.vram[tile_addr - 0x8000 + win_line + 1];
+      u8 wd1 =
+          gb->mem.vram[(tile_addr - 0x8000 + win_line) & (MEM_VRAM_SIZE - 1)];
+      u8 wd2 =
+          gb->mem
+              .vram[(tile_addr - 0x8000 + win_line + 1) & (MEM_VRAM_SIZE - 1)];
 
       int win_bit = 7 - (win_x % 8);
       color_idx = ((wd2 >> win_bit) & 1) << 1 | ((wd1 >> win_bit) & 1);
-    } else if (lcdc & 0x01) {
+    } else {
+    draw_bg:;
       u8 x_pos = (scx + pixel) & 0xFF;
       u8 y_pos = (scy + ly) & 0xFF;
       u16 offset = tile_map + (y_pos / 8) * 32 + (x_pos / 8);
 
-      u8 tile_num = gb->mem.vram[offset - 0x8000];
-      u16 tile_addr =
-          is_signed ? (0x9000 + (i8)tile_num * 16) : (0x8000 + tile_num * 16);
+      u8 tile_num = gb->mem.vram[(offset - 0x8000) & (MEM_VRAM_SIZE - 1)];
+      u16 tile_addr = is_signed ? (u16)(0x9000 + (i8)tile_num * 16)
+                                : (u16)(0x8000 + tile_num * 16);
       u8 line = (y_pos % 8) * 2;
-      u8 data1 = gb->mem.vram[tile_addr - 0x8000 + line];
-      u8 data2 = gb->mem.vram[tile_addr - 0x8000 + line + 1];
+      u8 data1 =
+          gb->mem.vram[(tile_addr - 0x8000 + line) & (MEM_VRAM_SIZE - 1)];
+      u8 data2 =
+          gb->mem.vram[(tile_addr - 0x8000 + line + 1) & (MEM_VRAM_SIZE - 1)];
 
       int bit = 7 - (x_pos % 8);
       color_idx = ((data2 >> bit) & 1) << 1 | ((data1 >> bit) & 1);
@@ -124,8 +136,8 @@ void ppu_render_scanline(GB *gb) {
     line *= 2;
 
     u16 tile_addr = 0x8000 + (tile_num * 16) + line;
-    u8 data1 = gb->mem.vram[tile_addr - 0x8000];
-    u8 data2 = gb->mem.vram[tile_addr - 0x8000 + 1];
+    u8 data1 = gb->mem.vram[(tile_addr - 0x8000) & (MEM_VRAM_SIZE - 1)];
+    u8 data2 = gb->mem.vram[(tile_addr - 0x8000 + 1) & (MEM_VRAM_SIZE - 1)];
 
     u8 pal = (flags & 0x10) ? gb->mem.io[0x49] : gb->mem.io[0x48];
 
@@ -157,14 +169,13 @@ void ppu_step(GB *gb, int m_cycles) {
   gb->ppu.mode_clock += t_cycles;
 
   u8 stat = gb->mem.io[0x41];
-  u8 ly = gb->mem.io[0x44];
   u8 lyc = gb->mem.io[0x45];
-
   u8 lcdc = gb->mem.io[0x40];
 
   if ((lcdc & 0x80) == 0) {
     gb->ppu.mode_clock = 0;
     gb->ppu.mode = PPU_MODE_OAM;
+    gb->ppu.current_line = 0;
     gb->mem.io[0x44] = 0;
     gb->ppu.window_line_counter = 0;
     stat = (stat & ~0x03) | PPU_MODE_OAM;
@@ -191,9 +202,9 @@ void ppu_step(GB *gb, int m_cycles) {
   case PPU_MODE_HBLANK:
     if (gb->ppu.mode_clock >= 204) {
       gb->ppu.mode_clock -= 204;
-      ly++;
+      gb->ppu.current_line++;
 
-      if (ly == 144) {
+      if (gb->ppu.current_line == 144) {
         gb->ppu.mode = PPU_MODE_VBLANK;
         cpu_request_interrupt(gb, INT_VBLANK);
       } else {
@@ -205,21 +216,26 @@ void ppu_step(GB *gb, int m_cycles) {
   case PPU_MODE_VBLANK:
     if (gb->ppu.mode_clock >= 456) {
       gb->ppu.mode_clock -= 456;
-      ly++;
+      gb->ppu.current_line++;
 
-      if (ly > 153) {
+      if (gb->ppu.current_line > 153) {
         gb->ppu.mode = PPU_MODE_OAM;
         gb->ppu.window_line_counter = 0;
-        ly = 0;
+        gb->ppu.current_line = 0;
       }
     }
     break;
   }
 
-  gb->mem.io[0x44] = ly;
+  u8 reported_ly = gb->ppu.current_line;
+  if (gb->ppu.current_line == 153 && gb->ppu.mode_clock >= 4) {
+    reported_ly = 0;
+  }
+
+  gb->mem.io[0x44] = reported_ly;
   stat = (stat & ~0x03) | (gb->ppu.mode & 0x03);
 
-  if (ly == lyc) {
+  if (reported_ly == lyc) {
     stat |= 0x04;
   } else {
     stat &= ~0x04;

@@ -15,6 +15,7 @@ typedef struct {
   int mode;
   int mode_clock;
   bool_t stat_irq_line;
+  u8 current_line;
   u8 window_line_counter;
   u8 bg_color_index[160];
 } PPU;

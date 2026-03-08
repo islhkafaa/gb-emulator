@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include <SDL2/SDL.h>
+#include <stdio.h>
 
 struct GB;
 
@@ -67,6 +68,10 @@ typedef struct {
   int cycles;
   int frame_sequencer;
 
+  FILE *wav_file;
+  u32 wav_data_size;
+  bool_t is_recording;
+
   u8 nr50;
   u8 nr51;
   u8 nr52;
@@ -79,6 +84,7 @@ typedef struct {
 void apu_init(struct GB *gb);
 void apu_step(struct GB *gb, int cycles);
 void apu_quit(struct GB *gb);
+void apu_toggle_recording(struct GB *gb);
 
 u8 apu_read(struct GB *gb, u16 addr);
 void apu_write(struct GB *gb, u16 addr, u8 val);
