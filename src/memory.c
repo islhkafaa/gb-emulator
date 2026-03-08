@@ -2,6 +2,8 @@
 #include "../include/apu.h"
 #include "../include/gb.h"
 #include "../include/joypad.h"
+#include <string.h>
+#include <time.h>
 
 void memory_init(Memory *mem, const u8 *rom) {
   void *gb_ptr = mem->gb_ptr;
@@ -16,6 +18,19 @@ void memory_init(Memory *mem, const u8 *rom) {
   mem->mbc.ram_bank = 0;
   mem->mbc.ram_enable = 0;
   mem->mbc.banking_mode = 0;
+
+  if (mem->mbc.type >= 0x0F && mem->mbc.type <= 0x13) {
+    time_t t = time(NULL);
+    struct tm *tm = localtime(&t);
+    if (tm) {
+      mem->mbc.rtc[0] = (u8)tm->tm_sec;
+      mem->mbc.rtc[1] = (u8)tm->tm_min;
+      mem->mbc.rtc[2] = (u8)tm->tm_hour;
+      int days = tm->tm_yday;
+      mem->mbc.rtc[3] = (u8)(days & 0xFF);
+      mem->mbc.rtc[4] = (u8)((days >> 8) & 0x01);
+    }
+  }
 
   mem->io[0x00] = 0xCF;
   mem->io[0x04] = 0xAB;
@@ -43,6 +58,11 @@ void memory_init(Memory *mem, const u8 *rom) {
 }
 
 u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
+  struct GB *gb = (struct GB *)mem->gb_ptr;
+  if (gb && gb->dma_cycles > 0 && (addr < 0xFF80 || addr > 0xFFFE)) {
+    return 0xFF;
+  }
+
   if (addr <= MEM_ROM_BANK0_END) {
     if (!rom)
       return 0xFF;
@@ -72,6 +92,8 @@ u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
       if (mbc == 0x05 || mbc == 0x06) {
         return mem->ext_ram[(addr - MEM_EXT_RAM_START) & 0x01FF] | 0xF0;
       } else if (mbc >= 0x0F && mbc <= 0x13) {
+        if (mem->mbc.ram_bank >= 0x08 && mem->mbc.ram_bank <= 0x0C)
+          return mem->mbc.rtc_latch[mem->mbc.ram_bank - 0x08];
         if (mem->mbc.ram_bank <= 0x03)
           bank = mem->mbc.ram_bank;
         else
@@ -99,9 +121,13 @@ u8 bus_read(Memory *mem, const u8 *rom, u16 addr) {
     return 0xFF;
   }
   if (addr == 0xFF00) {
+    if (!mem->gb_ptr)
+      return 0xFF;
     return joypad_read((struct GB *)mem->gb_ptr);
   }
   if (addr >= 0xFF10 && addr <= 0xFF3F) {
+    if (!mem->gb_ptr)
+      return 0xFF;
     return apu_read((struct GB *)mem->gb_ptr, addr);
   }
   if (addr <= MEM_IO_END) {
@@ -177,6 +203,12 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
   if (addr <= 0x7FFF) {
     if (is_mbc1) {
       mem->mbc.banking_mode = val & 0x01;
+    } else if (is_mbc3) {
+      if (mem->mbc.rtc_latch_flag == 0 && val == 0x01) {
+        for (int i = 0; i < 5; i++)
+          mem->mbc.rtc_latch[i] = mem->mbc.rtc[i];
+      }
+      mem->mbc.rtc_latch_flag = val & 0x01;
     }
     return;
   }
@@ -193,6 +225,10 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
       }
       u16 bank = 0;
       if (mbc >= 0x0F && mbc <= 0x13) {
+        if (mem->mbc.ram_bank >= 0x08 && mem->mbc.ram_bank <= 0x0C) {
+          mem->mbc.rtc[mem->mbc.ram_bank - 0x08] = val;
+          return;
+        }
         if (mem->mbc.ram_bank <= 0x03)
           bank = mem->mbc.ram_bank;
         else
@@ -223,19 +259,22 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
     return;
   }
   if (addr == 0xFF46) {
-    u16 src = val << 8;
-    for (int i = 0; i < 0xA0; i++) {
-      mem->oam[i] = bus_read(mem, rom, src + i);
+    struct GB *gb_ptr = (struct GB *)mem->gb_ptr;
+    if (gb_ptr) {
+      gb_ptr->dma_src = (u16)val << 8;
+      gb_ptr->dma_cycles = 160;
     }
     mem->io[addr - MEM_IO_START] = val;
     return;
   }
   if (addr == 0xFF00) {
-    joypad_write((struct GB *)mem->gb_ptr, val);
+    if (mem->gb_ptr)
+      joypad_write((struct GB *)mem->gb_ptr, val);
     return;
   }
   if (addr >= 0xFF10 && addr <= 0xFF3F) {
-    apu_write((struct GB *)mem->gb_ptr, addr, val);
+    if (mem->gb_ptr)
+      apu_write((struct GB *)mem->gb_ptr, addr, val);
     return;
   }
   if (addr == 0xFF02) {
@@ -249,20 +288,22 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
   }
   if (addr == 0xFF04) {
     struct GB *gb = (struct GB *)mem->gb_ptr;
-    u8 tac = mem->io[0x07];
-    if (tac & 0x04) {
-      int freq_shifts[] = {9, 3, 5, 7};
-      int shift = freq_shifts[tac & 0x03];
-      if ((gb->div_counter >> shift) & 1) {
-        if (mem->io[0x05] == 0xFF) {
-          mem->io[0x05] = 0;
-          gb->tima_overflow_delay = 4;
-        } else {
-          mem->io[0x05]++;
+    if (gb) {
+      u8 tac = mem->io[0x07];
+      if (tac & 0x04) {
+        int freq_shifts[] = {9, 3, 5, 7};
+        int shift = freq_shifts[tac & 0x03];
+        if ((gb->div_counter >> shift) & 1) {
+          if (mem->io[0x05] == 0xFF) {
+            mem->io[0x05] = 0;
+            gb->tima_overflow_delay = 4;
+          } else {
+            mem->io[0x05]++;
+          }
         }
       }
+      gb->div_counter = 0;
     }
-    gb->div_counter = 0;
     mem->io[0x04] = 0;
     return;
   }
@@ -270,7 +311,7 @@ void bus_write(Memory *mem, const u8 *rom, u16 addr, u8 val) {
     struct GB *gb = (struct GB *)mem->gb_ptr;
     u8 old_tac = mem->io[0x07];
     mem->io[0x07] = val;
-    if ((old_tac & 0x04) && !(val & 0x04)) {
+    if (gb && (old_tac & 0x04) && !(val & 0x04)) {
       int freq_shifts[] = {9, 3, 5, 7};
       int shift = freq_shifts[old_tac & 0x03];
       if ((gb->div_counter >> shift) & 1) {

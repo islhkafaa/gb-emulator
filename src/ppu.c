@@ -5,20 +5,22 @@
 static const u32 PALETTE[4] = {0xFF9BBC0F, 0xFF8BAC0F, 0xFF306230, 0xFF0F380F};
 
 void ppu_render_scanline(GB *gb) {
-  u8 lcdc = bus_read(&gb->mem, gb->rom, 0xFF40);
-
-  u8 scy = bus_read(&gb->mem, gb->rom, 0xFF42);
-  u8 scx = bus_read(&gb->mem, gb->rom, 0xFF43);
-  u8 ly = bus_read(&gb->mem, gb->rom, 0xFF44);
-  u8 bgp = bus_read(&gb->mem, gb->rom, 0xFF47);
+  u8 lcdc = gb->mem.io[0x40];
+  u8 scy = gb->mem.io[0x42];
+  u8 scx = gb->mem.io[0x43];
+  u8 ly = gb->mem.io[0x44];
+  u8 bgp = gb->mem.io[0x47];
 
   u16 tile_map = (lcdc & 0x08) ? 0x9C00 : 0x9800;
   int is_signed = !(lcdc & 0x10);
 
-  u8 wy = bus_read(&gb->mem, gb->rom, 0xFF4A);
-  u8 wx = bus_read(&gb->mem, gb->rom, 0xFF4B);
+  u8 wy = gb->mem.io[0x4A];
+  u8 wx = gb->mem.io[0x4B];
 
   bool_t window_drawn = FALSE;
+  u8 *bg_ci = gb->ppu.bg_color_index;
+  for (int i = 0; i < 160; i++)
+    bg_ci[i] = 0;
 
   for (int pixel = 0; pixel < 160; pixel++) {
     u8 color_idx = 0;
@@ -30,12 +32,12 @@ void ppu_render_scanline(GB *gb) {
       u16 win_tile_map = (lcdc & 0x40) ? 0x9C00 : 0x9800;
       u16 win_offset = win_tile_map + (win_y / 8) * 32 + (win_x / 8);
 
-      u8 tile_num = bus_read(&gb->mem, gb->rom, win_offset);
+      u8 tile_num = gb->mem.vram[win_offset - 0x8000];
       u16 tile_addr =
           is_signed ? (0x9000 + (i8)tile_num * 16) : (0x8000 + tile_num * 16);
       u8 win_line = (win_y % 8) * 2;
-      u8 wd1 = bus_read(&gb->mem, gb->rom, tile_addr + win_line);
-      u8 wd2 = bus_read(&gb->mem, gb->rom, tile_addr + win_line + 1);
+      u8 wd1 = gb->mem.vram[tile_addr - 0x8000 + win_line];
+      u8 wd2 = gb->mem.vram[tile_addr - 0x8000 + win_line + 1];
 
       int win_bit = 7 - (win_x % 8);
       color_idx = ((wd2 >> win_bit) & 1) << 1 | ((wd1 >> win_bit) & 1);
@@ -44,12 +46,12 @@ void ppu_render_scanline(GB *gb) {
       u8 y_pos = (scy + ly) & 0xFF;
       u16 offset = tile_map + (y_pos / 8) * 32 + (x_pos / 8);
 
-      u8 tile_num = bus_read(&gb->mem, gb->rom, offset);
+      u8 tile_num = gb->mem.vram[offset - 0x8000];
       u16 tile_addr =
           is_signed ? (0x9000 + (i8)tile_num * 16) : (0x8000 + tile_num * 16);
       u8 line = (y_pos % 8) * 2;
-      u8 data1 = bus_read(&gb->mem, gb->rom, tile_addr + line);
-      u8 data2 = bus_read(&gb->mem, gb->rom, tile_addr + line + 1);
+      u8 data1 = gb->mem.vram[tile_addr - 0x8000 + line];
+      u8 data2 = gb->mem.vram[tile_addr - 0x8000 + line + 1];
 
       int bit = 7 - (x_pos % 8);
       color_idx = ((data2 >> bit) & 1) << 1 | ((data1 >> bit) & 1);
@@ -57,6 +59,7 @@ void ppu_render_scanline(GB *gb) {
 
     int mapped_col = (bgp >> (color_idx * 2)) & 0x03;
     gb->ppu.frame_buffer[ly * 160 + pixel] = PALETTE[mapped_col];
+    bg_ci[pixel] = color_idx;
   }
 
   if (window_drawn) {
@@ -75,14 +78,14 @@ void ppu_render_scanline(GB *gb) {
   Sprite sprites[10];
 
   for (int i = 0; i < 40 && obj_count < 10; i++) {
-    u16 oam_addr = 0xFE00 + i * 4;
-    int obj_y = bus_read(&gb->mem, gb->rom, oam_addr) - 16;
+    u16 oam_addr = i * 4;
+    int obj_y = gb->mem.oam[oam_addr] - 16;
     if (ly < obj_y || ly >= obj_y + obj_size)
       continue;
     sprites[obj_count].y = obj_y;
-    sprites[obj_count].x = bus_read(&gb->mem, gb->rom, oam_addr + 1) - 8;
-    sprites[obj_count].tile = bus_read(&gb->mem, gb->rom, oam_addr + 2);
-    sprites[obj_count].flags = bus_read(&gb->mem, gb->rom, oam_addr + 3);
+    sprites[obj_count].x = gb->mem.oam[oam_addr + 1] - 8;
+    sprites[obj_count].tile = gb->mem.oam[oam_addr + 2];
+    sprites[obj_count].flags = gb->mem.oam[oam_addr + 3];
     sprites[obj_count].oam_idx = i;
     obj_count++;
   }
@@ -121,11 +124,10 @@ void ppu_render_scanline(GB *gb) {
     line *= 2;
 
     u16 tile_addr = 0x8000 + (tile_num * 16) + line;
-    u8 data1 = bus_read(&gb->mem, gb->rom, tile_addr);
-    u8 data2 = bus_read(&gb->mem, gb->rom, tile_addr + 1);
+    u8 data1 = gb->mem.vram[tile_addr - 0x8000];
+    u8 data2 = gb->mem.vram[tile_addr - 0x8000 + 1];
 
-    u8 pal = (flags & 0x10) ? bus_read(&gb->mem, gb->rom, 0xFF49)
-                            : bus_read(&gb->mem, gb->rom, 0xFF48);
+    u8 pal = (flags & 0x10) ? gb->mem.io[0x49] : gb->mem.io[0x48];
 
     for (int p_x = 0; p_x < 8; p_x++) {
       int screen_x = obj_x + p_x;
@@ -140,8 +142,7 @@ void ppu_render_scanline(GB *gb) {
         continue;
 
       if ((flags & 0x80) != 0) {
-        u32 current_bg = gb->ppu.frame_buffer[ly * 160 + screen_x];
-        if (current_bg != PALETTE[(bgp & 0x03)])
+        if (gb->ppu.bg_color_index[screen_x] != 0)
           continue;
       }
 
@@ -159,16 +160,14 @@ void ppu_step(GB *gb, int m_cycles) {
   u8 ly = gb->mem.io[0x44];
   u8 lyc = gb->mem.io[0x45];
 
-  int current_mode = gb->ppu.mode;
-  int req_int = 0;
   u8 lcdc = gb->mem.io[0x40];
 
   if ((lcdc & 0x80) == 0) {
     gb->ppu.mode_clock = 0;
-    gb->ppu.mode = PPU_MODE_HBLANK;
+    gb->ppu.mode = PPU_MODE_OAM;
     gb->mem.io[0x44] = 0;
     gb->ppu.window_line_counter = 0;
-    stat = (stat & ~0x03) | PPU_MODE_HBLANK;
+    stat = (stat & ~0x03) | PPU_MODE_OAM;
     gb->mem.io[0x41] = stat;
     return;
   }
@@ -185,8 +184,6 @@ void ppu_step(GB *gb, int m_cycles) {
     if (gb->ppu.mode_clock >= 172) {
       gb->ppu.mode_clock -= 172;
       gb->ppu.mode = PPU_MODE_HBLANK;
-      if (stat & 0x08)
-        req_int = 1;
       ppu_render_scanline(gb);
     }
     break;
@@ -198,13 +195,9 @@ void ppu_step(GB *gb, int m_cycles) {
 
       if (ly == 144) {
         gb->ppu.mode = PPU_MODE_VBLANK;
-        if (stat & 0x10)
-          req_int = 1;
         cpu_request_interrupt(gb, INT_VBLANK);
       } else {
         gb->ppu.mode = PPU_MODE_OAM;
-        if (stat & 0x20)
-          req_int = 1;
       }
     }
     break;
@@ -217,8 +210,6 @@ void ppu_step(GB *gb, int m_cycles) {
       if (ly > 153) {
         gb->ppu.mode = PPU_MODE_OAM;
         gb->ppu.window_line_counter = 0;
-        if (stat & 0x20)
-          req_int = 1;
         ly = 0;
       }
     }
@@ -226,6 +217,7 @@ void ppu_step(GB *gb, int m_cycles) {
   }
 
   gb->mem.io[0x44] = ly;
+  stat = (stat & ~0x03) | (gb->ppu.mode & 0x03);
 
   if (ly == lyc) {
     stat |= 0x04;
@@ -248,6 +240,5 @@ void ppu_step(GB *gb, int m_cycles) {
   }
   gb->ppu.stat_irq_line = stat_line;
 
-  stat = (stat & ~0x03) | (gb->ppu.mode & 0x03);
   gb->mem.io[0x41] = stat;
 }

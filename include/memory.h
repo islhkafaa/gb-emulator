@@ -39,6 +39,9 @@ typedef struct {
   u8 ram_enable;
   u8 banking_mode;
   u8 rom_bank_hi;
+  u8 rtc[5];
+  u8 rtc_latch[5];
+  u8 rtc_latch_flag;
 } MBC;
 
 typedef struct {

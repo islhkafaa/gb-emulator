@@ -21,6 +21,7 @@ int main(int argc, char *argv[]) {
 
   rom_print_header(gb->rom);
 
+  printf("DEBUG: calling gb_init\n");
   if (!gb_init(gb, argv[1])) {
     fprintf(stderr, "gb_init failed\n");
     rom_free(gb->rom);

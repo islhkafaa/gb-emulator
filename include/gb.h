@@ -29,6 +29,8 @@ typedef struct GB {
   int div_counter;
   int timer_counter;
   int tima_overflow_delay;
+  int dma_cycles;
+  u16 dma_src;
   char rom_path[1024];
 } GB;
 

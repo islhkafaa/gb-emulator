@@ -16,6 +16,7 @@ typedef struct {
   int mode_clock;
   bool_t stat_irq_line;
   u8 window_line_counter;
+  u8 bg_color_index[160];
 } PPU;
 
 void ppu_step(struct GB *gb, int m_cycles);

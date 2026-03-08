@@ -19,6 +19,8 @@ typedef struct {
   int div_counter;
   int timer_counter;
   int tima_overflow_delay;
+  int dma_cycles;
+  u16 dma_src;
 } SaveData;
 
 static void state_path(const GB *gb, char *out, size_t len) {
@@ -47,6 +49,8 @@ void gb_savestate(GB *gb) {
   sd.div_counter = gb->div_counter;
   sd.timer_counter = gb->timer_counter;
   sd.tima_overflow_delay = gb->tima_overflow_delay;
+  sd.dma_cycles = gb->dma_cycles;
+  sd.dma_src = gb->dma_src;
   sd.mem.gb_ptr = NULL;
 
   SDL_AudioDeviceID dev = sd.apu.device;
@@ -94,6 +98,8 @@ void gb_loadstate(GB *gb) {
   gb->div_counter = sd.div_counter;
   gb->timer_counter = sd.timer_counter;
   gb->tima_overflow_delay = sd.tima_overflow_delay;
+  gb->dma_cycles = sd.dma_cycles;
+  gb->dma_src = sd.dma_src;
 
   gb->apu.device = dev;
   gb->mem.gb_ptr = gb_ptr;

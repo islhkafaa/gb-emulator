@@ -53,10 +53,13 @@ int gb_init(GB *gb, const char *path) {
 
   SDL_RenderSetLogicalSize(gb->renderer, GB_WIDTH, GB_HEIGHT);
 
+  printf("DEBUG: gb_init starting\n");
   cpu_init(&gb->cpu);
 
   gb->mem.gb_ptr = gb;
+  printf("DEBUG: calling memory_init\n");
   memory_init(&gb->mem, gb->rom);
+  printf("DEBUG: memory_init done\n");
 
   if (gb->rom) {
     u8 type = gb->rom[0x0147];
@@ -99,6 +102,14 @@ void gb_run(GB *gb) {
       timer_tick(gb, consumed);
       ppu_step(gb, consumed);
       apu_step(gb, consumed);
+      if (gb->dma_cycles > 0) {
+        gb->dma_cycles -= consumed;
+        if (gb->dma_cycles <= 0) {
+          gb->dma_cycles = 0;
+          for (int i = 0; i < 0xA0; i++)
+            gb->mem.oam[i] = bus_read(&gb->mem, gb->rom, gb->dma_src + i);
+        }
+      }
       cycles += consumed;
     }
     frames++;
@@ -117,8 +128,7 @@ void gb_run(GB *gb) {
         } else {
           joypad_press(gb, event.key.keysym.sym);
         }
-      }
-      if (event.type == SDL_KEYUP) {
+      } else if (event.type == SDL_KEYUP) {
         joypad_release(gb, event.key.keysym.sym);
       }
     }
